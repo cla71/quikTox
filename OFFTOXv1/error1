@@ -1,0 +1,230 @@
+C:\Users\Christian\PycharmProjects\quikTox\.venv\Scripts\python.exe C:\Users\Christian\PycharmProjects\quikTox\chembl_query.py
+================================================================================
+ChEMBL NHR & ADMET Safety Target Dataset Builder
+================================================================================
+
+Querying 24 targets for IC50/Ki data...
+Minimum pChEMBL threshold: 5.0 (10 µM)
+
+Querying ER_alpha (CHEMBL206) for IC50...
+  Retrieved 1000 records
+Querying ER_alpha (CHEMBL206) for Ki...
+  Retrieved 684 records
+✓ ER_alpha: 1684 records
+
+Querying ER_beta (CHEMBL242) for IC50...
+  Retrieved 1000 records
+Querying ER_beta (CHEMBL242) for Ki...
+  Retrieved 429 records
+✓ ER_beta: 1429 records
+
+Querying AR (CHEMBL1871) for IC50...
+  Retrieved 1000 records
+Querying AR (CHEMBL1871) for Ki...
+  Retrieved 1000 records
+✓ AR: 2000 records
+
+Querying GR (CHEMBL2034) for IC50...
+  Retrieved 1000 records
+Querying GR (CHEMBL2034) for Ki...
+  Retrieved 1000 records
+✓ GR: 2000 records
+
+Querying PR (CHEMBL208) for IC50...
+  Retrieved 1000 records
+Querying PR (CHEMBL208) for Ki...
+  Retrieved 682 records
+✓ PR: 1682 records
+
+Querying MR (CHEMBL1994) for IC50...
+  Retrieved 1000 records
+Querying MR (CHEMBL1994) for Ki...
+  Retrieved 197 records
+✓ MR: 1197 records
+
+Querying PPARg (CHEMBL239) for IC50...
+  Retrieved 932 records
+Querying PPARg (CHEMBL239) for Ki...
+  Retrieved 140 records
+✓ PPARg: 1072 records
+
+Querying PXR (CHEMBL2498) for IC50...
+  Retrieved 47 records
+Querying PXR (CHEMBL2498) for Ki...
+  Retrieved 0 records
+✓ PXR: 47 records
+
+Querying CAR (CHEMBL2248) for IC50...
+  Retrieved 0 records
+Querying CAR (CHEMBL2248) for Ki...
+  Retrieved 0 records
+✗ CAR: No data
+
+Querying LXRa (CHEMBL5231) for IC50...
+  Retrieved 0 records
+Querying LXRa (CHEMBL5231) for Ki...
+  Retrieved 0 records
+✗ LXRa: No data
+
+Querying LXRb (CHEMBL4309) for IC50...
+  Retrieved 18 records
+Querying LXRb (CHEMBL4309) for Ki...
+  Retrieved 0 records
+✓ LXRb: 18 records
+
+Querying FXR (CHEMBL2001) for IC50...
+  Retrieved 830 records
+Querying FXR (CHEMBL2001) for Ki...
+  Retrieved 673 records
+✓ FXR: 1503 records
+
+Querying RXRa (CHEMBL2260) for IC50...
+  Retrieved 0 records
+Querying RXRa (CHEMBL2260) for Ki...
+  Retrieved 0 records
+✗ RXRa: No data
+
+Querying VDR (CHEMBL1977) for IC50...
+  Retrieved 345 records
+Querying VDR (CHEMBL1977) for Ki...
+  Retrieved 12 records
+✓ VDR: 357 records
+
+Querying hERG (CHEMBL240) for IC50...
+  Retrieved 1000 records
+Querying hERG (CHEMBL240) for Ki...
+  Retrieved 1000 records
+✓ hERG: 2000 records
+
+Querying Cav1.2 (CHEMBL1940) for IC50...
+  Retrieved 143 records
+Querying Cav1.2 (CHEMBL1940) for Ki...
+  Retrieved 28 records
+✓ Cav1.2: 171 records
+
+Querying Nav1.5 (CHEMBL1993) for IC50...
+  Retrieved 372 records
+Querying Nav1.5 (CHEMBL1993) for Ki...
+  Retrieved 2 records
+✓ Nav1.5: 374 records
+
+Querying CYP3A4 (CHEMBL340) for IC50...
+  Retrieved 1000 records
+Querying CYP3A4 (CHEMBL340) for Ki...
+  Retrieved 158 records
+✓ CYP3A4: 1158 records
+
+Querying CYP2D6 (CHEMBL289) for IC50...
+  Retrieved 1000 records
+Querying CYP2D6 (CHEMBL289) for Ki...
+  Retrieved 129 records
+✓ CYP2D6: 1129 records
+
+Querying CYP2C9 (CHEMBL3397) for IC50...
+  Retrieved 1000 records
+Querying CYP2C9 (CHEMBL3397) for Ki...
+  Retrieved 92 records
+✓ CYP2C9: 1092 records
+
+Querying CYP1A2 (CHEMBL3356) for IC50...
+  Retrieved 1000 records
+Querying CYP1A2 (CHEMBL3356) for Ki...
+  Retrieved 45 records
+✓ CYP1A2: 1045 records
+
+Querying CYP2C19 (CHEMBL3622) for IC50...
+  Retrieved 978 records
+Querying CYP2C19 (CHEMBL3622) for Ki...
+  Retrieved 53 records
+✓ CYP2C19: 1031 records
+
+Querying P-gp (CHEMBL4302) for IC50...
+  Retrieved 1000 records
+Querying P-gp (CHEMBL4302) for Ki...
+  Retrieved 249 records
+✓ P-gp: 1249 records
+
+Querying BSEP (CHEMBL4105) for IC50...
+  Retrieved 101 records
+Querying BSEP (CHEMBL4105) for Ki...
+  Retrieved 3 records
+✓ BSEP: 104 records
+
+
+================================================================================
+Total bioactivity records: 22342
+Unique compounds: 13825
+Unique targets: 21
+
+Retrieving properties for 13825 unique molecules...
+  Processed 50/13825 molecules
+  Error retrieving properties for batch 150: 'NoneType' object has no attribute 'get'
+  Processed 550/13825 molecules
+  Error retrieving properties for batch 800: 'NoneType' object has no attribute 'get'
+  Processed 1050/13825 molecules
+  Processed 1550/13825 molecules
+  Processed 2050/13825 molecules
+  Processed 2550/13825 molecules
+  Processed 3050/13825 molecules
+  Processed 3550/13825 molecules
+  Processed 4050/13825 molecules
+  Processed 4550/13825 molecules
+  Processed 5050/13825 molecules
+  Processed 5550/13825 molecules
+  Processed 6050/13825 molecules
+  Processed 6550/13825 molecules
+  Processed 7050/13825 molecules
+  Processed 7550/13825 molecules
+  Processed 8050/13825 molecules
+  Processed 8550/13825 molecules
+  Processed 9050/13825 molecules
+  Processed 9550/13825 molecules
+  Processed 10050/13825 molecules
+  Processed 10550/13825 molecules
+  Processed 11050/13825 molecules
+  Error retrieving properties for batch 11050: 'NoneType' object has no attribute 'get'
+  Processed 11550/13825 molecules
+  Processed 12050/13825 molecules
+  Processed 12550/13825 molecules
+  Error retrieving properties for batch 12600: 'NoneType' object has no attribute 'get'
+  Processed 13050/13825 molecules
+  Error retrieving properties for batch 13100: 'NoneType' object has no attribute 'get'
+  Processed 13550/13825 molecules
+Traceback (most recent call last):
+  File "C:\Users\Christian\PycharmProjects\quikTox\chembl_query.py", line 282, in <module>
+    main()
+    ~~~~^^
+  File "C:\Users\Christian\PycharmProjects\quikTox\chembl_query.py", line 243, in main
+    enriched_df.to_csv(output_file, index=False)
+    ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Christian\PycharmProjects\quikTox\.venv\Lib\site-packages\pandas\core\generic.py", line 3988, in to_csv
+    return DataFrameRenderer(formatter).to_csv(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        path_or_buf,
+        ^^^^^^^^^^^^
+    ...<14 lines>...
+        storage_options=storage_options,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\Christian\PycharmProjects\quikTox\.venv\Lib\site-packages\pandas\io\formats\format.py", line 1025, in to_csv
+    csv_formatter.save()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\Christian\PycharmProjects\quikTox\.venv\Lib\site-packages\pandas\io\formats\csvs.py", line 251, in save
+    with get_handle(
+         ~~~~~~~~~~^
+        self.filepath_or_buffer,
+        ^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+        storage_options=self.storage_options,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ) as handles:
+    ^
+  File "C:\Users\Christian\PycharmProjects\quikTox\.venv\Lib\site-packages\pandas\io\common.py", line 793, in get_handle
+    check_parent_directory(str(handle))
+    ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "C:\Users\Christian\PycharmProjects\quikTox\.venv\Lib\site-packages\pandas\io\common.py", line 652, in check_parent_directory
+    raise OSError(rf"Cannot save file into a non-existent directory: '{parent}'")
+OSError: Cannot save file into a non-existent directory: '\mnt\user-data\outputs'
+
+Process finished with exit code 1

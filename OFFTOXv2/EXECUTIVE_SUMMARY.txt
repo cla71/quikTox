@@ -1,0 +1,698 @@
+"""
+EXECUTIVE SUMMARY: ML Model Assessment for Safety Pharmacology
+================================================================
+
+Project: Predictive Modeling of Safety Liabilities with Uncertainty Quantification
+Date: February 4, 2026
+Framework: Comprehensive evidence-based assessment plan
+
+"""
+
+# =====================================================================
+# 1. PROJECT OVERVIEW
+# =====================================================================
+
+"""
+OBJECTIVE:
+Develop and validate machine learning models to predict binding/inhibition 
+probability for key safety pharmacology targets with quantified uncertainty.
+
+SAFETY TARGETS (11 total):
+
+Cardiac Safety (3):
+  - hERG (CHEMBL240): K+ channel, primary cardiac risk
+  - Cav1.2 (CHEMBL1940): L-type Ca2+ channel
+  - Nav1.5 (CHEMBL1993): Cardiac Na+ channel
+
+Hepatotoxicity (5):
+  - CYP3A4 (CHEMBL340): Major metabolizing enzyme (50% of drugs)
+  - CYP2D6 (CHEMBL289): Polymorphic enzyme, genetic variability
+  - CYP2C9 (CHEMBL3397): Warfarin metabolism, drug interactions
+  - CYP1A2 (CHEMBL3356): Caffeine metabolism
+  - CYP2C19 (CHEMBL3622): Clopidogrel activation
+
+Other Safety (2):
+  - P-glycoprotein (CHEMBL4302): Efflux transporter, BBB penetration
+  - BSEP (CHEMBL4105): Bile salt export pump, cholestasis risk
+
+DATA SPECIFICATIONS:
+  - Activity types: IC50, Ki (standard potency measures)
+  - Minimum quality: pChEMBL ≥ 4 (10 µM or better)
+  - Activity cutoff: pChEMBL ≥ 6 (1 µM) for "active" classification
+  - Expected total compounds: ~50,000-100,000 unique structures
+  - Expected measurements: ~200,000-500,000 bioactivity records
+"""
+
+# =====================================================================
+# 2. COMPREHENSIVE MODEL ASSESSMENT PLAN
+# =====================================================================
+
+"""
+PHASE 1: DATA PREPARATION (Weeks 1-2)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Task 1.1: Data Collection
+  - Extract bioactivity data from ChEMBL for all 11 targets
+  - Include IC50 and Ki measurements
+  - Filter for standard_relation = '=' (exact measurements)
+  - Remove data validity issues
+  
+  Expected output:
+    - Combined dataset: ~200K-500K measurements
+    - Unique compounds: ~50K-100K
+    - Format: CSV with SMILES, activity values, target info
+
+Task 1.2: Data Cleaning
+  - Remove duplicates (keep highest quality measurement)
+  - Handle missing SMILES/structural issues
+  - Standardize structures (tautomers, salts)
+  - Remove suspicious outliers (>3 SD from target mean)
+  
+  Quality checks:
+    ✓ All SMILES valid and parseable by RDKit
+    ✓ Activity values in reasonable range (nM to mM)
+    ✓ No obvious data entry errors (e.g., 0.001 vs 1000 mixups)
+
+Task 1.3: Feature Engineering
+  
+  A) Molecular Descriptors (200-300 features):
+     - Constitutional: MW, heavy atoms, rotatable bonds
+     - Topological: connectivity indices, molecular shape
+     - Electronic: partial charges, dipole moment
+     - Lipophilicity: LogP, MR
+     - Pharmacophore: HBA, HBD, PSA, aromatic rings
+  
+  B) Molecular Fingerprints (2048-4096 bits):
+     - Morgan (ECFP4): radius=2, nBits=2048
+     - MACCS: 166 structural keys
+     - RDKit: Daylight-like, nBits=2048
+     - Atom Pair: pair-based descriptors
+  
+  C) Combined Features:
+     - Concatenate descriptors + fingerprints
+     - Total features: ~2300-4400 dimensions
+
+Task 1.4: Feature Selection
+  - Remove low-variance features (threshold=0.01)
+  - Remove highly correlated features (r > 0.95)
+  - Mutual information selection (top 500-1000 features)
+  
+  Rationale: Reduce dimensionality, improve computational efficiency,
+            reduce overfitting risk
+
+Task 1.5: Data Splitting
+  - Temporal split (if date available): Train on older, test on newer
+  - Scaffold split: Separate by molecular scaffold (test generalization)
+  - Random stratified split: 60% train, 20% validation, 20% test
+  
+  Recommended: Scaffold split for most rigorous evaluation
+  
+  Additional: Create 5-fold CV splits for model selection
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PHASE 2: MODEL TRAINING (Weeks 3-4)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Models to evaluate with hyperparameter ranges:
+
+1. Random Forest (RF)
+   Hyperparameters:
+   - n_estimators: [100, 200, 500]
+   - max_depth: [10, 20, 30, None]
+   - min_samples_split: [2, 5, 10]
+   - max_features: ['sqrt', 'log2', 0.3]
+   - class_weight: ['balanced', None]
+   
+   Advantages:
+   ✓ Robust to overfitting
+   ✓ Handles high-dimensional data well
+   ✓ Built-in feature importance
+   ✓ No feature scaling required
+   ✓ Fast training and prediction
+   
+   Considerations:
+   ⚠ Large memory footprint with many trees
+   ⚠ Less interpretable than single trees
+
+2. XGBoost
+   Hyperparameters:
+   - n_estimators: [100, 200, 500]
+   - max_depth: [3, 5, 7]
+   - learning_rate: [0.01, 0.05, 0.1]
+   - subsample: [0.6, 0.8, 1.0]
+   - colsample_bytree: [0.6, 0.8, 1.0]
+   - gamma: [0, 0.1, 0.5]
+   - reg_alpha: [0, 0.1, 1]  # L1 regularization
+   - reg_lambda: [1, 2, 5]   # L2 regularization
+   
+   Advantages:
+   ✓ Often achieves best performance
+   ✓ Built-in regularization
+   ✓ Handles missing values
+   ✓ GPU acceleration available
+   
+   Considerations:
+   ⚠ Sensitive to hyperparameters
+   ⚠ Longer training time than RF
+
+3. LightGBM
+   Hyperparameters:
+   - n_estimators: [100, 200, 500]
+   - max_depth: [3, 5, 7, 10]
+   - learning_rate: [0.01, 0.05, 0.1]
+   - num_leaves: [31, 63, 127]
+   - subsample: [0.6, 0.8, 1.0]
+   - reg_alpha: [0, 0.1, 1]
+   - reg_lambda: [1, 2, 5]
+   
+   Advantages:
+   ✓ Faster training than XGBoost
+   ✓ Lower memory usage
+   ✓ Handles large datasets efficiently
+   
+   Considerations:
+   ⚠ Can overfit on small datasets
+
+4. Neural Networks (MLP)
+   Architecture:
+   - Input layer: n_features
+   - Hidden layers: [512, 256, 128] or [1024, 512, 256, 128]
+   - Activation: ReLU or ELU
+   - Dropout: 0.2-0.4
+   - Batch normalization: Yes
+   - Output: 1 neuron with sigmoid activation
+   
+   Hyperparameters:
+   - learning_rate: [0.001, 0.0001]
+   - batch_size: [64, 128, 256]
+   - optimizer: Adam with weight decay
+   - epochs: 100-200 with early stopping
+   
+   Advantages:
+   ✓ Can learn complex non-linear relationships
+   ✓ Flexible architecture
+   ✓ MC Dropout for uncertainty
+   
+   Considerations:
+   ⚠ Requires feature scaling
+   ⚠ Prone to overfitting
+   ⚠ Longer training time
+   ⚠ Requires careful hyperparameter tuning
+
+5. Deep Learning (Ensemble DNNs)
+   - 5 independent networks with different initializations
+   - Bootstrap sampling for each model
+   - MC Dropout enabled (100 iterations at test time)
+   
+   Advantages:
+   ✓ Uncertainty quantification (epistemic + aleatoric)
+   ✓ Better calibration than single models
+   ✓ Robustness to outliers
+   
+   Considerations:
+   ⚠ 5× training and inference time
+   ⚠ Large memory requirements
+
+6. Support Vector Machine (SVM)
+   Kernel: RBF (Radial Basis Function)
+   
+   Hyperparameters:
+   - C: [0.1, 1, 10, 100]
+   - gamma: ['scale', 'auto', 0.001, 0.01]
+   - class_weight: ['balanced', None]
+   
+   Advantages:
+   ✓ Effective in high-dimensional spaces
+   ✓ Memory efficient (uses support vectors only)
+   
+   Considerations:
+   ⚠ Slow training on large datasets (>10K samples)
+   ⚠ Requires feature scaling
+   ⚠ Limited uncertainty quantification
+
+7. GAN for Data Augmentation
+   - Train on minority class only (if imbalanced)
+   - Generate synthetic samples to balance classes
+   - Validate synthetic data quality
+   
+   Use case: Address class imbalance (e.g., few toxic compounds)
+   
+   Quality checks:
+   ✓ Generated samples have valid chemical structures
+   ✓ Descriptor distributions match real data
+   ✓ Improve downstream model performance
+
+
+Hyperparameter Optimization Strategy:
+  - Method: Bayesian optimization (Optuna) or Random Search
+  - Iterations: 50-100 trials per model
+  - CV folds: 5-fold stratified
+  - Scoring: ROC-AUC (primary), PR-AUC (secondary)
+  - Parallelization: Use all available CPU cores
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PHASE 3: MODEL EVALUATION (Weeks 5-6)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Evaluation Protocol:
+
+A) Cross-Validation (Internal Validation)
+   - Method: Repeated Stratified K-Fold
+   - Configuration: 5 folds × 3 repeats = 15 evaluations
+   - Purpose: Assess model stability and generalization
+   
+   Metrics (calculated per fold):
+   - ROC-AUC: Overall discrimination ability
+   - PR-AUC: Performance on imbalanced datasets (emphasizes precision/recall)
+   - MCC: Matthews Correlation Coefficient (balanced metric)
+   - Sensitivity @ 90% Specificity
+   - Specificity @ 90% Sensitivity
+   - Cohen's Kappa: Agreement measure
+   
+   Report per model:
+   - Mean ± SD for each metric
+   - 95% Confidence Intervals
+   - Statistical significance vs. baseline
+
+B) External Validation (Test Set)
+   - Held-out 20% of data (never used in training/tuning)
+   - Same metrics as CV
+   - Confusion matrix at optimal threshold
+   - ROC and PR curves with confidence bands
+   
+   Threshold selection strategies:
+   1. Youden's Index: max(Sensitivity + Specificity - 1)
+   2. F1-optimal: maximize F1 score
+   3. Cost-sensitive: weight false positives vs false negatives
+   4. Fixed sensitivity: e.g., 90% sensitivity
+
+C) Calibration Assessment
+   - Calibration curves (10 bins)
+   - Expected Calibration Error (ECE)
+   - Maximum Calibration Error (MCE)
+   - Brier Score
+   - Hosmer-Lemeshow test
+   
+   Interpretation:
+   - Well-calibrated: predictions match observed frequencies
+   - ECE < 0.05: Excellent calibration
+   - ECE 0.05-0.10: Good calibration
+   - ECE > 0.10: Poor calibration, consider recalibration
+
+D) Applicability Domain
+   - Leverage approach (Mahalanobis distance)
+   - Local Outlier Factor (LOF)
+   - k-NN distance to training set
+   
+   Purpose: Identify test samples outside model's expertise
+   
+   Warning threshold:
+   - Distance > 3× mean training leverage
+   - LOF score < -1.5
+   
+   Recommendation: Flag predictions for manual review
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PHASE 4: UNCERTAINTY QUANTIFICATION (Week 7)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Critical for decision-making: NOT just a prediction, but confidence in prediction
+
+Methods:
+
+1. Conformal Prediction (Recommended)
+   - Provides prediction sets with coverage guarantees
+   - P(y_true ∈ prediction_set) ≥ α (e.g., 95%)
+   - Non-parametric, model-agnostic
+   
+   Implementation:
+   - Split data: Train (60%), Calibration (20%), Test (20%)
+   - Calculate nonconformity scores on calibration set
+   - Construct prediction sets for test samples
+   
+   Advantages:
+   ✓ Rigorous statistical guarantees
+   ✓ Works with any base model
+   ✓ No distributional assumptions
+   
+   Interpretation:
+   - Set size = 1: High confidence, single class
+   - Set size = 2: Low confidence, both classes possible
+   - Smaller sets = more informative predictions
+
+2. Monte Carlo Dropout (Neural Networks)
+   - Enable dropout at test time
+   - Run 100 forward passes
+   - Calculate prediction variance
+   
+   Output:
+   - Mean prediction
+   - Standard deviation (uncertainty)
+   - 95% Confidence interval
+   
+   Interpretation:
+   - High variance: Model uncertain (epistemic uncertainty)
+   - Low variance: Model confident
+
+3. Ensemble Uncertainty
+   - Train 5+ models with different initializations
+   - Prediction variance = epistemic uncertainty
+   - Within-model variance = aleatoric uncertainty
+   
+   Total uncertainty = Epistemic + Aleatoric
+   
+   Decomposition benefits:
+   - Epistemic: Reducible with more data
+   - Aleatoric: Irreducible noise in labels
+
+4. Calibration-Based Uncertainty
+   - Use calibrated probabilities directly
+   - p(active) close to 0 or 1: High confidence
+   - p(active) close to 0.5: Low confidence
+   
+   Requires:
+   - Well-calibrated model (ECE < 0.05)
+   - Post-hoc calibration if needed (Platt scaling, isotonic regression)
+
+
+Uncertainty Quality Metrics:
+  - Sharpness: Average confidence (closer to 0/1 is better)
+  - Resolution: Can predictions discriminate outcomes?
+  - Calibration: Do 70% confidence predictions have 70% accuracy?
+  
+  Trade-offs:
+  - High sharpness with poor calibration: Overconfident
+  - Good calibration with low sharpness: Underconfident
+  - Goal: High sharpness AND good calibration
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PHASE 5: STATISTICAL COMPARISON (Week 8)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Objective: Determine if observed performance differences are statistically significant
+
+Tests:
+
+1. Paired T-Tests
+   - Compare two models on same CV folds
+   - H0: Mean difference = 0
+   - Report: t-statistic, p-value, effect size (Cohen's d)
+   
+   Interpretation:
+   - p < 0.05: Statistically significant difference
+   - Cohen's d > 0.5: Moderate effect size
+   - Cohen's d > 0.8: Large effect size
+
+2. Bonferroni Correction
+   - Adjust for multiple comparisons
+   - Corrected α = 0.05 / n_comparisons
+   - More conservative, reduces false positives
+
+3. McNemar's Test
+   - Compare classifiers on test set
+   - Uses contingency table of correct/incorrect predictions
+   - Non-parametric alternative to paired t-test
+
+4. Friedman Test + Nemenyi Post-hoc
+   - Non-parametric ANOVA for multiple models
+   - Ranks models across datasets/folds
+   - Post-hoc identifies which pairs differ significantly
+
+
+Multi-Criteria Decision Analysis (MCDA):
+
+Criteria (with default weights):
+  1. ROC-AUC (25%): Primary performance metric
+  2. PR-AUC (20%): Imbalanced data performance
+  3. Calibration (20%): Probability quality (ECE)
+  4. Robustness (15%): Low variance across folds
+  5. Efficiency (10%): Training + inference time
+  6. Interpretability (10%): Feature importance availability
+
+Composite Score = Σ (normalized_criterion × weight)
+
+Ranking:
+  - Normalize each criterion to [0, 1] scale
+  - Apply weights
+  - Sum to get composite score
+  - Rank models by composite score
+
+Sensitivity Analysis:
+  - Test different weight schemes
+  - Identify robust winner across schemes
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PHASE 6: MODEL SELECTION (Week 9)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Decision Framework:
+
+PRIMARY CRITERIA (Must meet):
+  ✓ ROC-AUC > 0.75 (good discrimination)
+  ✓ ECE < 0.10 (good calibration)
+  ✓ Stable performance (CV std < 0.05)
+
+SECONDARY CRITERIA (Desirable):
+  ✓ PR-AUC > 0.70 (good on imbalanced data)
+  ✓ MCC > 0.50 (balanced performance)
+  ✓ Interpretability (feature importance)
+  ✓ Fast inference (<1ms per compound)
+
+Expected Best Models (by use case):
+
+For hERG (critical cardiac safety):
+  - Priority: High sensitivity (catch all toxic compounds)
+  - Recommended: Ensemble DNN or XGBoost
+  - Rationale: Best performance, uncertainty quantification
+  - Threshold: 95% sensitivity, accept lower specificity
+
+For CYP inhibition (development decision):
+  - Priority: Balanced performance, interpretability
+  - Recommended: Random Forest or LightGBM
+  - Rationale: Fast, interpretable, good performance
+  - Threshold: Youden's index (optimal balance)
+
+For screening (early stage):
+  - Priority: Fast inference, high throughput
+  - Recommended: Random Forest
+  - Rationale: Fast prediction, no GPU required
+  - Threshold: 90% sensitivity
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PHASE 7: DELIVERABLES (Week 10)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Technical Report (30-40 pages)
+   Contents:
+   - Executive summary (2 pages)
+   - Introduction and objectives
+   - Data description and preprocessing
+   - Feature engineering methodology
+   - Model architectures and hyperparameters
+   - Cross-validation results (tables and plots)
+   - External validation results
+   - Statistical comparison
+   - Uncertainty quantification analysis
+   - Model selection rationale
+   - Limitations and future work
+   - References
+
+2. Model Performance Plots (PNG/PDF, 300 DPI)
+   - ROC curves (all models on one plot)
+   - Precision-Recall curves
+   - Calibration curves
+   - Learning curves
+   - Feature importance plots (top 20 features)
+   - Confusion matrices
+   - Uncertainty distribution plots
+   - Error analysis plots
+
+3. Statistical Comparison Tables (CSV/Excel)
+   - Cross-validation summary (mean ± SD)
+   - Paired t-test results
+   - Multi-criteria decision analysis
+   - Model ranking with composite scores
+
+4. Trained Models (Pickle or ONNX)
+   - Best model per target
+   - Ensemble models if used
+   - Scalers and preprocessors
+   - Feature names and indices
+
+5. Prediction Pipeline (Python Script)
+   - Load trained model
+   - Preprocess new SMILES
+   - Generate features
+   - Make predictions with uncertainty
+   - Apply applicability domain checks
+   - Output: predictions + confidence intervals
+
+6. Model Card (Markdown)
+   - Model description
+   - Intended use
+   - Training data characteristics
+   - Performance metrics
+   - Limitations and caveats
+   - Ethical considerations
+   - Contact information
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EXPECTED RESULTS SUMMARY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Based on literature and similar studies:
+
+Target-Specific Performance (ROC-AUC):
+  - hERG: 0.80-0.90 (well-studied, good data quality)
+  - CYP3A4: 0.75-0.85 (challenging, substrate-dependent)
+  - CYP2D6: 0.75-0.85
+  - P-gp: 0.70-0.80 (complex mechanism)
+  - Others: 0.70-0.85
+
+Best Overall Models (predicted):
+  1. XGBoost: Highest average performance
+  2. Ensemble DNN: Best uncertainty quantification
+  3. Random Forest: Best balance (performance/speed/interpretability)
+
+Key Success Factors:
+  ✓ Large, high-quality training data (ChEMBL gold standard)
+  ✓ Appropriate feature engineering (fingerprints + descriptors)
+  ✓ Rigorous validation strategy (scaffold split)
+  ✓ Uncertainty quantification (conformal prediction)
+  ✓ Statistical rigor (Bonferroni-corrected tests)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+RECOMMENDATIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Start with Random Forest as baseline
+   - Fast to train
+   - Robust to hyperparameters
+   - Good performance
+   - Interpretable
+
+2. Use XGBoost or LightGBM for best performance
+   - Invest time in hyperparameter tuning
+   - Use early stopping to prevent overfitting
+   - Consider GPU acceleration
+
+3. Use Ensemble DNNs for uncertainty quantification
+   - Critical for high-stakes decisions
+   - Provides confidence intervals
+   - Identifies uncertain predictions
+
+4. Apply conformal prediction for all models
+   - Provides rigorous uncertainty bounds
+   - Model-agnostic
+   - Easy to implement
+
+5. Use applicability domain checks
+   - Flag predictions outside training space
+   - Manual review for flagged compounds
+   - Improves reliability
+
+6. Consider per-target models vs. multi-target
+   - Per-target: Better performance, simpler interpretation
+   - Multi-target: Data efficiency, transfer learning
+   - Recommendation: Start with per-target
+
+7. Implement continuous monitoring
+   - Track prediction accuracy on new data
+   - Retrain when performance degrades
+   - Update with new ChEMBL releases
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+IMPLEMENTATION CHECKLIST
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Data Preparation:
+☐ Extract bioactivity data from ChEMBL (IC50, Ki)
+☐ Clean data (remove duplicates, handle missing values)
+☐ Standardize chemical structures (RDKit)
+☐ Generate molecular descriptors (200-300 features)
+☐ Generate molecular fingerprints (2048-4096 bits)
+☐ Feature selection (variance threshold, correlation filter)
+☐ Train/val/test split (60/20/20, scaffold-based)
+
+Model Training:
+☐ Implement Random Forest baseline
+☐ Implement XGBoost with hyperparameter tuning
+☐ Implement LightGBM
+☐ Implement Neural Network (MLP)
+☐ Implement Ensemble DNN (5 models)
+☐ (Optional) Implement SVM
+☐ (Optional) Train GAN for data augmentation
+
+Model Evaluation:
+☐ 5-fold CV × 3 repeats for each model
+☐ Calculate ROC-AUC, PR-AUC, MCC, Sensitivity, Specificity
+☐ External validation on test set
+☐ Generate ROC and PR curves
+☐ Calibration assessment (ECE, MCE, Brier score)
+☐ Applicability domain analysis
+
+Uncertainty Quantification:
+☐ Implement conformal prediction
+☐ Implement MC Dropout (for neural networks)
+☐ Implement ensemble uncertainty
+☐ Calculate prediction intervals
+☐ Assess uncertainty quality (sharpness, calibration)
+
+Statistical Analysis:
+☐ Paired t-tests between models
+☐ Bonferroni correction for multiple comparisons
+☐ Effect size calculations (Cohen's d)
+☐ Multi-criteria decision analysis
+☐ Model ranking and selection
+
+Deliverables:
+☐ Generate performance plots (ROC, PR, calibration, etc.)
+☐ Create statistical comparison tables
+☐ Write technical report
+☐ Prepare model cards
+☐ Package trained models
+☐ Create prediction pipeline script
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CONCLUSION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+This comprehensive plan provides:
+
+✓ Evidence-based approach with statistical rigor
+✓ Multiple model architectures for comparison
+✓ Rigorous uncertainty quantification
+✓ Thorough validation strategy
+✓ Clear decision framework for model selection
+✓ Practical implementation guidance
+
+Expected outcome:
+  - High-performance predictive models (ROC-AUC 0.75-0.90)
+  - Reliable uncertainty estimates
+  - Statistical confidence in model comparisons
+  - Production-ready prediction pipeline
+
+Timeline: 10 weeks (part-time) or 5 weeks (full-time)
+Resources: GPU recommended for deep learning, 32GB+ RAM for large datasets
+
+Next steps:
+  1. Extract data from ChEMBL (manual export or API)
+  2. Run data preparation pipeline
+  3. Train baseline Random Forest model
+  4. Iterate through other models
+  5. Compare and select best model(s)
+  6. Generate final deliverables
+
+"""
+
+print(__doc__)

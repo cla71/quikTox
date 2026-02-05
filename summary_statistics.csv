@@ -1,0 +1,7 @@
+category,target,n_total,n_unique_compounds,n_ic50,n_ki,n_active,n_inactive,pchembl_mean,pchembl_std,pchembl_min,pchembl_max
+Cardiac Safety,hERG,397,394,215,182,153,244,5.82,1.06,4.0,9.05
+Cardiac Safety,Cav1.2,200,199,172,28,58,142,5.63,1.08,4.0,9.6
+Cardiac Safety,Nav1.5,378,377,376,2,83,295,5.48,0.74,4.0,9.52
+Hepatotoxicity,CYP3A4,404,400,387,17,108,296,5.38,0.93,4.0,8.4
+Hepatotoxicity,CYP2D6,473,465,393,80,110,363,5.41,0.91,4.0,8.48
+Hepatotoxicity,CYP1A2,276,276,276,0,60,216,5.31,1.0,4.0,8.22
