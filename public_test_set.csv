@@ -1,0 +1,7 @@
+compound_name,canonical_smiles,target_common_name,is_active,source
+Caffeine,Cn1cnc2n(C)c(=O)n(C)c(=O)c12,CYP1A2,1,Literature substrate/inhibitor
+Propranolol,CC(C)NCC(O)COC1=CC=CC=C1,CYP2D6,1,Literature substrate
+Verapamil,COC1=CC=CC=C1C(CN(C)CC)CCOC2=CC=CC=C2OC,Cav1.2,1,Literature calcium channel blocker
+Acetaminophen,CC(=O)NC1=CC=C(O)C=C1O,CYP3A4,0,Public data non-inhibitor
+Glycine,NCC(=O)O,Nav1.5,0,Small amino acid control
+Sorbitol,C(C(C(C(C(CO)O)O)O)O)O,hERG,0,Polyol control
