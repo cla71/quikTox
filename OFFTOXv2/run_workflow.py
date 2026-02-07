@@ -11,14 +11,12 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 
 import numpy as np
-import pandas as pd
+import csv
 from rdkit import Chem
 from rdkit.Chem import Crippen, Descriptors, Lipinski, MolSurf, rdFingerprintGenerator
 from rdkit.Chem.Scaffolds import MurckoScaffold
 from scipy import stats
 from sklearn.calibration import CalibratedClassifierCV, calibration_curve
-from sklearn.compose import ColumnTransformer
-from sklearn.feature_selection import VarianceThreshold
 from sklearn.metrics import (
     average_precision_score,
     confusion_matrix,
@@ -30,12 +28,10 @@ from sklearn.metrics import (
 from sklearn.model_selection import RandomizedSearchCV, RepeatedStratifiedKFold
 from sklearn.neighbors import NearestNeighbors
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestClassifier
 from xgboost import XGBClassifier
 from lightgbm import LGBMClassifier
-import matplotlib.pyplot as plt
-import seaborn as sns
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_PATH = ROOT / "safety_targets_bioactivity.csv"
@@ -50,21 +46,33 @@ class SplitData:
     test_idx: np.ndarray
 
 
-def load_and_clean_data(path: Path) -> pd.DataFrame:
-    df = pd.read_csv(path)
-    df = df[df["standard_relation"] == "="]
-    df = df[df["pchembl_value"].notna()]
-    df = df[df["pchembl_value"] >= 4.0]
-    df = df[df["canonical_smiles"].notna()]
-    df = df.sort_values("pchembl_value", ascending=False)
-    df = df.drop_duplicates(subset=["molecule_chembl_id", "target_chembl_id"], keep="first")
-    df = df.copy()
-    df["is_active"] = (df["pchembl_value"] >= 6.0).astype(int)
-    df = df.reset_index(drop=True)
-    return df
+def load_and_clean_data(path: Path) -> List[dict]:
+    rows = []
+    with path.open(newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        for row in reader:
+            if row.get("standard_relation") != "=":
+                continue
+            if not row.get("pchembl_value") or not row.get("canonical_smiles"):
+                continue
+            try:
+                pchembl = float(row["pchembl_value"])
+            except ValueError:
+                continue
+            if pchembl < 4.0:
+                continue
+            row["pchembl_value"] = pchembl
+            row["is_active"] = 1 if pchembl >= 6.0 else 0
+            rows.append(row)
+    deduped = {}
+    for row in rows:
+        key = (row.get("molecule_chembl_id"), row.get("target_chembl_id"))
+        if key not in deduped or row["pchembl_value"] > deduped[key]["pchembl_value"]:
+            deduped[key] = row
+    return list(deduped.values())
 
 
-def compute_descriptors(smiles: List[str]) -> pd.DataFrame:
+def compute_descriptors(smiles: List[str]) -> Tuple[np.ndarray, List[str]]:
     descriptor_functions = {
         "MW": Descriptors.MolWt,
         "LogP": Crippen.MolLogP,
@@ -81,10 +89,10 @@ def compute_descriptors(smiles: List[str]) -> pd.DataFrame:
     for smi in smiles:
         mol = Chem.MolFromSmiles(smi)
         if mol is None:
-            rows.append({name: np.nan for name in descriptor_functions})
+            rows.append([np.nan for _ in descriptor_functions])
             continue
-        rows.append({name: func(mol) for name, func in descriptor_functions.items()})
-    return pd.DataFrame(rows)
+        rows.append([func(mol) for func in descriptor_functions.values()])
+    return np.array(rows, dtype=float), list(descriptor_functions.keys())
 
 
 def compute_morgan_fingerprints(smiles: List[str], n_bits: int = 2048) -> np.ndarray:
@@ -134,17 +142,37 @@ def scaffold_split(smiles: List[str], y: np.ndarray, random_state: int = 42) -> 
     )
 
 
-def build_feature_matrix(df: pd.DataFrame) -> Tuple[pd.DataFrame, np.ndarray]:
-    descriptors = compute_descriptors(df["canonical_smiles"].tolist())
-    fingerprints = compute_morgan_fingerprints(df["canonical_smiles"].tolist())
-    fingerprint_df = pd.DataFrame(fingerprints, columns=[f"FP_{i}" for i in range(fingerprints.shape[1])])
-    target_df = pd.get_dummies(df["target_common_name"], prefix="target")
-    features = pd.concat([descriptors, fingerprint_df, target_df], axis=1)
-    features = features.fillna(features.median())
-    selector = VarianceThreshold(threshold=0.01)
-    features_selected = selector.fit_transform(features)
-    selected_columns = features.columns[selector.get_support()]
-    return pd.DataFrame(features_selected, columns=selected_columns), df["is_active"].values
+def build_feature_matrix(
+    rows: List[dict],
+    selected_columns: List[str] | None = None,
+) -> Tuple[np.ndarray, np.ndarray, List[str]]:
+    smiles = [row["canonical_smiles"] for row in rows]
+    targets = [row["target_common_name"] for row in rows]
+    labels = np.array([row["is_active"] for row in rows], dtype=int)
+    descriptors, descriptor_names = compute_descriptors(smiles)
+    fingerprints = compute_morgan_fingerprints(smiles)
+    fingerprint_names = [f"FP_{i}" for i in range(fingerprints.shape[1])]
+    target_names = sorted({t for t in targets if t})
+    target_map = {name: idx for idx, name in enumerate(target_names)}
+    target_matrix = np.zeros((len(rows), len(target_names)), dtype=float)
+    for idx, target in enumerate(targets):
+        if target in target_map:
+            target_matrix[idx, target_map[target]] = 1.0
+    feature_matrix = np.concatenate([descriptors, fingerprints, target_matrix], axis=1)
+    columns = descriptor_names + fingerprint_names + [f"target_{name}" for name in target_names]
+    if selected_columns is None:
+        variances = np.nanvar(feature_matrix, axis=0)
+        mask = variances > 0.01
+        feature_matrix = np.nan_to_num(feature_matrix[:, mask], nan=0.0)
+        selected_columns = [col for col, keep in zip(columns, mask) if keep]
+    else:
+        col_index = {col: idx for idx, col in enumerate(columns)}
+        aligned = np.zeros((len(rows), len(selected_columns)), dtype=float)
+        for out_idx, col in enumerate(selected_columns):
+            if col in col_index:
+                aligned[:, out_idx] = np.nan_to_num(feature_matrix[:, col_index[col]], nan=0.0)
+        feature_matrix = aligned
+    return feature_matrix, labels, selected_columns
 
 
 def ece_score(y_true: np.ndarray, y_prob: np.ndarray, n_bins: int = 10) -> Tuple[float, float]:
@@ -225,14 +253,14 @@ def get_models(random_state: int) -> Dict[str, Tuple[Pipeline, Dict[str, List]]]
 def run_workflow() -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     df = load_and_clean_data(DATA_PATH)
-    features, labels = build_feature_matrix(df)
-    split = scaffold_split(df["canonical_smiles"].tolist(), labels, random_state=RANDOM_STATE)
+    features, labels, selected_columns = build_feature_matrix(df)
+    split = scaffold_split([row["canonical_smiles"] for row in df], labels, random_state=RANDOM_STATE)
 
-    X_train = features.iloc[split.train_idx].values
+    X_train = features[split.train_idx]
     y_train = labels[split.train_idx]
-    X_val = features.iloc[split.val_idx].values
+    X_val = features[split.val_idx]
     y_val = labels[split.val_idx]
-    X_test = features.iloc[split.test_idx].values
+    X_test = features[split.test_idx]
     y_test = labels[split.test_idx]
 
     models = get_models(RANDOM_STATE)
@@ -286,10 +314,13 @@ def run_workflow() -> None:
         val_probs = search.best_estimator_.predict_proba(X_val)[:, 1]
         calibration_metrics[name] = ece_score(y_val, val_probs)[0]
 
-    cv_summary_df = pd.DataFrame(cv_summary).sort_values("roc_auc_mean", ascending=False)
-    cv_summary_df.to_csv(OUTPUT_DIR / "cv_summary.csv", index=False)
+    cv_summary_sorted = sorted(cv_summary, key=lambda row: row["roc_auc_mean"], reverse=True)
+    with (OUTPUT_DIR / "cv_summary.csv").open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(cv_summary_sorted[0].keys()))
+        writer.writeheader()
+        writer.writerows(cv_summary_sorted)
 
-    best_model_name = cv_summary_df.iloc[0]["model"]
+    best_model_name = cv_summary_sorted[0]["model"]
     best_model = best_estimators[best_model_name]
     best_model.fit(np.vstack([X_train, X_val]), np.hstack([y_train, y_val]))
 
@@ -309,80 +340,70 @@ def run_workflow() -> None:
     test_metrics["ece"] = ece
     test_metrics["mce"] = mce
 
-    pd.DataFrame([test_metrics]).to_csv(OUTPUT_DIR / "test_metrics.csv", index=False)
+    with (OUTPUT_DIR / "test_metrics.csv").open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(test_metrics.keys()))
+        writer.writeheader()
+        writer.writerow(test_metrics)
 
-    fpr, tpr, _ = roc_curve(y_test, test_probs)
-    pr_precision, pr_recall, _ = precision_recall_curve(y_test, test_probs)
     cm = confusion_matrix(y_test, test_preds)
+    fpr, tpr, roc_thresholds = roc_curve(y_test, test_probs)
+    pr_precision, pr_recall, pr_thresholds = precision_recall_curve(y_test, test_probs)
+    with (OUTPUT_DIR / "roc_curve.csv").open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=["fpr", "tpr", "threshold"])
+        writer.writeheader()
+        for fpr_val, tpr_val, threshold in zip(fpr, tpr, roc_thresholds):
+            writer.writerow({"fpr": fpr_val, "tpr": tpr_val, "threshold": threshold})
 
-    plt.figure(figsize=(6, 5))
-    plt.plot(fpr, tpr, label=f"{best_model_name} (AUC={test_metrics['roc_auc']:.2f})")
-    plt.plot([0, 1], [0, 1], "--", color="gray")
-    plt.xlabel("False Positive Rate")
-    plt.ylabel("True Positive Rate")
-    plt.title("ROC Curve")
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig(OUTPUT_DIR / "roc_curve.png", dpi=300)
-    plt.close()
+    with (OUTPUT_DIR / "pr_curve.csv").open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=["precision", "recall", "threshold"])
+        writer.writeheader()
+        thresholds = list(pr_thresholds) + [np.nan]
+        for precision, recall, threshold in zip(pr_precision, pr_recall, thresholds):
+            writer.writerow({"precision": precision, "recall": recall, "threshold": threshold})
 
-    plt.figure(figsize=(6, 5))
-    plt.plot(pr_recall, pr_precision, label=f"{best_model_name} (AP={test_metrics['pr_auc']:.2f})")
-    plt.xlabel("Recall")
-    plt.ylabel("Precision")
-    plt.title("Precision-Recall Curve")
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig(OUTPUT_DIR / "pr_curve.png", dpi=300)
-    plt.close()
-
-    plt.figure(figsize=(5, 4))
-    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues")
-    plt.title("Confusion Matrix")
-    plt.xlabel("Predicted")
-    plt.ylabel("Actual")
-    plt.tight_layout()
-    plt.savefig(OUTPUT_DIR / "confusion_matrix.png", dpi=300)
-    plt.close()
+    with (OUTPUT_DIR / "confusion_matrix.csv").open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(["", "pred_0", "pred_1"])
+        writer.writerow(["actual_0", cm[0, 0], cm[0, 1]])
+        writer.writerow(["actual_1", cm[1, 0], cm[1, 1]])
 
     prob_true, prob_pred = calibration_curve(y_test, calibrated_probs, n_bins=10)
-    plt.figure(figsize=(6, 5))
-    plt.plot(prob_pred, prob_true, marker="o", label="Calibrated")
-    plt.plot([0, 1], [0, 1], "--", color="gray")
-    plt.xlabel("Mean Predicted Probability")
-    plt.ylabel("Fraction of Positives")
-    plt.title("Calibration Curve")
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig(OUTPUT_DIR / "calibration_curve.png", dpi=300)
-    plt.close()
+    with (OUTPUT_DIR / "calibration_curve.csv").open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=["mean_predicted_prob", "fraction_positives"])
+        writer.writeheader()
+        for mean_pred, frac_pos in zip(prob_pred, prob_true):
+            writer.writerow({"mean_predicted_prob": mean_pred, "fraction_positives": frac_pos})
 
     if hasattr(best_model.named_steps["model"], "feature_importances_"):
         importances = best_model.named_steps["model"].feature_importances_
         indices = np.argsort(importances)[-20:]
-        plt.figure(figsize=(8, 6))
-        plt.barh(range(len(indices)), importances[indices])
-        plt.yticks(range(len(indices)), features.columns[indices])
-        plt.title("Top 20 Feature Importances")
-        plt.tight_layout()
-        plt.savefig(OUTPUT_DIR / "feature_importance.png", dpi=300)
-        plt.close()
+        feature_rows = [
+            {"feature": selected_columns[idx], "importance": float(importances[idx])}
+            for idx in indices
+        ]
+        feature_rows = sorted(feature_rows, key=lambda row: row["importance"], reverse=True)
+        with (OUTPUT_DIR / "feature_importance.csv").open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=["feature", "importance"])
+            writer.writeheader()
+            writer.writerows(feature_rows)
 
     calibration_probs = calibrated.predict_proba(X_test)
     prediction_sets, coverage = conformal_prediction(calibration_probs, y_test)
     set_sizes = prediction_sets.sum(axis=1)
-    pd.DataFrame({"set_size": set_sizes}).to_csv(OUTPUT_DIR / "conformal_set_sizes.csv", index=False)
+    with (OUTPUT_DIR / "conformal_set_sizes.csv").open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=["set_size"])
+        writer.writeheader()
+        for size in set_sizes:
+            writer.writerow({"set_size": int(size)})
     with open(OUTPUT_DIR / "conformal_summary.json", "w", encoding="utf-8") as handle:
         json.dump({"coverage": coverage, "avg_set_size": float(set_sizes.mean())}, handle, indent=2)
 
-    plt.figure(figsize=(6, 4))
-    sns.countplot(x=set_sizes)
-    plt.title("Conformal Prediction Set Sizes")
-    plt.xlabel("Set Size")
-    plt.ylabel("Count")
-    plt.tight_layout()
-    plt.savefig(OUTPUT_DIR / "conformal_set_sizes.png", dpi=300)
-    plt.close()
+    unique_sizes, counts = np.unique(set_sizes, return_counts=True)
+    with (OUTPUT_DIR / "conformal_set_sizes_summary.csv").open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=["set_size", "count"])
+        writer.writeheader()
+        for size, count in zip(unique_sizes, counts):
+            writer.writerow({"set_size": int(size), "count": int(count)})
 
     nn = NearestNeighbors(n_neighbors=5)
     nn.fit(X_train)
@@ -394,7 +415,7 @@ def run_workflow() -> None:
     out_of_domain = (test_dist > threshold).mean()
 
     stats_rows = []
-    models_list = cv_summary_df["model"].tolist()
+    models_list = [row["model"] for row in cv_summary_sorted]
     for i, model_a in enumerate(models_list):
         for model_b in models_list[i + 1 :]:
             scores_a = np.array(fold_scores.get(model_a, []))
@@ -412,14 +433,20 @@ def run_workflow() -> None:
                 "cohen_d": cohen_d,
             })
 
-    stats_df = pd.DataFrame(stats_rows)
-    if not stats_df.empty:
-        bonferroni = 0.05 / len(stats_df)
-        stats_df["bonferroni_alpha"] = bonferroni
-    stats_df.to_csv(OUTPUT_DIR / "statistical_comparison.csv", index=False)
+    if stats_rows:
+        bonferroni = 0.05 / len(stats_rows)
+        for row in stats_rows:
+            row["bonferroni_alpha"] = bonferroni
+        with (OUTPUT_DIR / "statistical_comparison.csv").open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=list(stats_rows[0].keys()))
+            writer.writeheader()
+            writer.writerows(stats_rows)
+    else:
+        with (OUTPUT_DIR / "statistical_comparison.csv").open("w", newline="", encoding="utf-8") as handle:
+            handle.write("")
 
     mcda_rows = []
-    for _, row in cv_summary_df.iterrows():
+    for row in cv_summary_sorted:
         name = row["model"]
         metric_row = {
             "model": name,
@@ -432,7 +459,6 @@ def run_workflow() -> None:
         }
         mcda_rows.append(metric_row)
 
-    mcda_df = pd.DataFrame(mcda_rows)
     weights = {
         "roc_auc": 0.25,
         "pr_auc": 0.20,
@@ -442,21 +468,27 @@ def run_workflow() -> None:
         "interpretability": 0.10,
     }
     for metric in weights:
-        min_val = mcda_df[metric].min()
-        max_val = mcda_df[metric].max()
-        if max_val > min_val:
-            mcda_df[metric] = (mcda_df[metric] - min_val) / (max_val - min_val)
-        else:
-            mcda_df[metric] = 1.0
-    mcda_df["composite_score"] = sum(mcda_df[m] * w for m, w in weights.items())
-    mcda_df = mcda_df.sort_values("composite_score", ascending=False)
-    mcda_df.to_csv(OUTPUT_DIR / "mcda_ranking.csv", index=False)
+        values = [row[metric] for row in mcda_rows]
+        min_val = min(values)
+        max_val = max(values)
+        for row in mcda_rows:
+            if max_val > min_val:
+                row[metric] = (row[metric] - min_val) / (max_val - min_val)
+            else:
+                row[metric] = 1.0
+    for row in mcda_rows:
+        row["composite_score"] = sum(row[m] * w for m, w in weights.items())
+    mcda_rows = sorted(mcda_rows, key=lambda row: row["composite_score"], reverse=True)
+    with (OUTPUT_DIR / "mcda_ranking.csv").open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(mcda_rows[0].keys()))
+        writer.writeheader()
+        writer.writerows(mcda_rows)
 
     summary = {
         "n_compounds": len(df),
-        "targets": df["target_common_name"].nunique(),
-        "actives": int(df["is_active"].sum()),
-        "inactives": int((df["is_active"] == 0).sum()),
+        "targets": len({row["target_common_name"] for row in df}),
+        "actives": int(sum(row["is_active"] for row in df)),
+        "inactives": int(sum(1 for row in df if row["is_active"] == 0)),
         "train_size": len(X_train),
         "val_size": len(X_val),
         "test_size": len(X_test),
@@ -468,6 +500,44 @@ def run_workflow() -> None:
     }
     with open(OUTPUT_DIR / "workflow_summary.json", "w", encoding="utf-8") as handle:
         json.dump(summary, handle, indent=2)
+
+    public_path = ROOT / "public_test_set.csv"
+    if public_path.exists():
+        public_rows = []
+        with public_path.open(newline="", encoding="utf-8") as handle:
+            reader = csv.DictReader(handle)
+            for row in reader:
+                row["is_active"] = int(row["is_active"])
+                public_rows.append(row)
+        overlap = set(zip([row["canonical_smiles"] for row in public_rows],
+                          [row["target_common_name"] for row in public_rows])) & set(
+            zip([row["canonical_smiles"] for row in df], [row["target_common_name"] for row in df])
+        )
+        if overlap:
+            raise ValueError(f"Public test set overlaps training data: {overlap}")
+        public_features, public_labels, _ = build_feature_matrix(
+            public_rows,
+            selected_columns=selected_columns,
+        )
+        public_probs = best_model.predict_proba(public_features)[:, 1]
+        public_preds = best_model.predict(public_features)
+        with (OUTPUT_DIR / "public_test_predictions.csv").open("w", newline="", encoding="utf-8") as handle:
+            fieldnames = list(public_rows[0].keys()) + ["predicted_prob_active", "predicted_label"]
+            writer = csv.DictWriter(handle, fieldnames=fieldnames)
+            writer.writeheader()
+            for row, prob, pred in zip(public_rows, public_probs, public_preds):
+                output_row = dict(row)
+                output_row["predicted_prob_active"] = float(prob)
+                output_row["predicted_label"] = int(pred)
+                writer.writerow(output_row)
+        public_metrics = {
+            "roc_auc": roc_auc_score(public_labels, public_probs),
+            "pr_auc": average_precision_score(public_labels, public_probs),
+            "mcc": matthews_corrcoef(public_labels, public_preds),
+            "confusion_matrix": confusion_matrix(public_labels, public_preds).tolist(),
+        }
+        with open(OUTPUT_DIR / "public_test_metrics.json", "w", encoding="utf-8") as handle:
+            json.dump(public_metrics, handle, indent=2)
 
 
 if __name__ == "__main__":

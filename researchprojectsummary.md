@@ -53,7 +53,12 @@ This run follows the EXECUTIVE_SUMMARY.txt workflow using `/safety_targets_bioac
 - The current run uses a reduced CV configuration (3 folds × 2 repeats) and a trimmed model list for runtime efficiency; a full 5×3 CV and additional model types (MLP, SVM, DNN ensembles) would further align with the complete plan.
 
 ## Generated Artifacts
-Key outputs in `OFFTOXv2/workflow_outputs/`:
+Key outputs in `OFFTOXv2/workflow_outputs/` after running the workflow:
 - `cv_summary.csv`, `test_metrics.csv`, `mcda_ranking.csv`
 - `workflow_summary.json`, `conformal_summary.json`, `statistical_comparison.csv`
-- `conformal_set_sizes.csv`
+- `conformal_set_sizes.csv`, `conformal_set_sizes_summary.csv`
+- `roc_curve.csv`, `pr_curve.csv`, `calibration_curve.csv`, `confusion_matrix.csv`
+- `feature_importance.csv`, `public_test_predictions.csv`, `public_test_metrics.json`
+
+## Public Test Set
+A small public test set (`public_test_set.csv`) was added with six compounds that do not appear in the training data. It includes three known binders (caffeine, propranolol, verapamil) spanning CYP1A2, CYP2D6, and Cav1.2 targets, plus three presumed non-binders to provide negative controls. Running the workflow will generate public test predictions and metrics for this set.
