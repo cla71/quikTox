@@ -46,14 +46,42 @@ class SplitData:
     test_idx: np.ndarray
 
 
+ACTIVITY_CLASS_MAP = {0: "inactive", 1: "less_potent", 2: "potent"}
+NUM_CLASSES = 3
+
+
 def load_and_clean_data(path: Path) -> List[dict]:
+    """Load training data and assign 3-class activity labels.
+
+    Classes
+    -------
+    2 – potent:      pChEMBL >= 5.0  (< 10 µM)
+    1 – less_potent: 4.0 <= pChEMBL < 5.0  (10-100 µM)
+    0 – inactive:    confirmed-inactive compounds (activity_class == 0 in
+                     source data, no measurable pChEMBL)
+    """
     rows = []
     with path.open(newline="", encoding="utf-8") as handle:
         reader = csv.DictReader(handle)
         for row in reader:
+            smi = row.get("canonical_smiles")
+            if not smi:
+                continue
+
+            # --- Handle confirmed-inactive compounds ---
+            # These may have activity_class already set to '0' by the
+            # retrieval script and may lack a pchembl_value.
+            raw_class = row.get("activity_class", "")
+            if raw_class == "0" or row.get("activity_class_label") == "inactive":
+                row["pchembl_value"] = None
+                row["activity_class"] = 0
+                rows.append(row)
+                continue
+
+            # --- Active / less-potent compounds ---
             if row.get("standard_relation") != "=":
                 continue
-            if not row.get("pchembl_value") or not row.get("canonical_smiles"):
+            if not row.get("pchembl_value"):
                 continue
             try:
                 pchembl = float(row["pchembl_value"])
@@ -62,13 +90,24 @@ def load_and_clean_data(path: Path) -> List[dict]:
             if pchembl < 4.0:
                 continue
             row["pchembl_value"] = pchembl
-            row["is_active"] = 1 if pchembl >= 6.0 else 0
+            # 3-class assignment
+            row["activity_class"] = 2 if pchembl >= 5.0 else 1
             rows.append(row)
-    deduped = {}
+
+    # Deduplicate: keep highest pchembl per (molecule, target) pair.
+    # For inactive compounds (pchembl is None), keep one entry.
+    deduped: dict = {}
     for row in rows:
         key = (row.get("molecule_chembl_id"), row.get("target_chembl_id"))
-        if key not in deduped or row["pchembl_value"] > deduped[key]["pchembl_value"]:
+        existing = deduped.get(key)
+        if existing is None:
             deduped[key] = row
+        else:
+            # Prefer the record with a real pchembl measurement
+            existing_p = existing.get("pchembl_value")
+            current_p = row.get("pchembl_value")
+            if current_p is not None and (existing_p is None or current_p > existing_p):
+                deduped[key] = row
     return list(deduped.values())
 
 
@@ -148,7 +187,7 @@ def build_feature_matrix(
 ) -> Tuple[np.ndarray, np.ndarray, List[str]]:
     smiles = [row["canonical_smiles"] for row in rows]
     targets = [row["target_common_name"] for row in rows]
-    labels = np.array([row["is_active"] for row in rows], dtype=int)
+    labels = np.array([row["activity_class"] for row in rows], dtype=int)
     descriptors, descriptor_names = compute_descriptors(smiles)
     fingerprints = compute_morgan_fingerprints(smiles)
     fingerprint_names = [f"FP_{i}" for i in range(fingerprints.shape[1])]
@@ -205,7 +244,9 @@ def get_models(random_state: int) -> Dict[str, Tuple[Pipeline, Dict[str, List]]]
         "RandomForest": (
             Pipeline([
                 ("scaler", StandardScaler(with_mean=False)),
-                ("model", RandomForestClassifier(random_state=random_state, n_jobs=-1)),
+                ("model", RandomForestClassifier(
+                    random_state=random_state, n_jobs=-1,
+                )),
             ]),
             {
                 "model__n_estimators": [200, 500],
@@ -220,7 +261,9 @@ def get_models(random_state: int) -> Dict[str, Tuple[Pipeline, Dict[str, List]]]
                 ("scaler", StandardScaler(with_mean=False)),
                 ("model", XGBClassifier(
                     random_state=random_state,
-                    eval_metric="logloss",
+                    objective="multi:softprob",
+                    num_class=NUM_CLASSES,
+                    eval_metric="mlogloss",
                     n_jobs=-1,
                     verbosity=0,
                 )),
@@ -236,7 +279,11 @@ def get_models(random_state: int) -> Dict[str, Tuple[Pipeline, Dict[str, List]]]
         "LightGBM": (
             Pipeline([
                 ("scaler", StandardScaler(with_mean=False)),
-                ("model", LGBMClassifier(random_state=random_state, n_jobs=-1, verbose=-1)),
+                ("model", LGBMClassifier(
+                    random_state=random_state, n_jobs=-1, verbose=-1,
+                    objective="multiclass",
+                    num_class=NUM_CLASSES,
+                )),
             ]),
             {
                 "model__n_estimators": [200, 500],
@@ -276,7 +323,7 @@ def run_workflow() -> None:
             pipeline,
             param_distributions=param_grid,
             n_iter=5,
-            scoring="roc_auc",
+            scoring="roc_auc_ovr",
             cv=3,
             random_state=RANDOM_STATE,
             n_jobs=-1,
@@ -294,10 +341,17 @@ def run_workflow() -> None:
             y_tr, y_te = y_train[train_idx], y_train[test_idx]
             estimator = search.best_estimator_
             estimator.fit(X_tr, y_tr)
-            probs = estimator.predict_proba(X_te)[:, 1]
+            probs = estimator.predict_proba(X_te)
             preds = estimator.predict(X_te)
-            scores.append(roc_auc_score(y_te, probs))
-            pr_scores.append(average_precision_score(y_te, probs))
+            scores.append(roc_auc_score(y_te, probs, multi_class="ovr", average="macro"))
+            # Per-class average precision, then macro-average
+            pr_auc_per_class = []
+            for cls in range(NUM_CLASSES):
+                if (y_te == cls).sum() > 0:
+                    pr_auc_per_class.append(average_precision_score(
+                        (y_te == cls).astype(int), probs[:, cls]
+                    ))
+            pr_scores.append(float(np.mean(pr_auc_per_class)) if pr_auc_per_class else 0.0)
             mcc_scores.append(matthews_corrcoef(y_te, preds))
 
         cv_summary.append({
@@ -311,8 +365,12 @@ def run_workflow() -> None:
         })
         fold_scores[name] = scores
 
-        val_probs = search.best_estimator_.predict_proba(X_val)[:, 1]
-        calibration_metrics[name] = ece_score(y_val, val_probs)[0]
+        val_probs = search.best_estimator_.predict_proba(X_val)
+        # ECE computed on the predicted probability of the true class
+        val_probs_true_class = val_probs[np.arange(len(y_val)), y_val]
+        calibration_metrics[name] = ece_score(
+            np.ones(len(y_val)), val_probs_true_class
+        )[0]
 
     cv_summary_sorted = sorted(cv_summary, key=lambda row: row["roc_auc_mean"], reverse=True)
     with (OUTPUT_DIR / "cv_summary.csv").open("w", newline="", encoding="utf-8") as handle:
@@ -324,19 +382,29 @@ def run_workflow() -> None:
     best_model = best_estimators[best_model_name]
     best_model.fit(np.vstack([X_train, X_val]), np.hstack([y_train, y_val]))
 
-    test_probs = best_model.predict_proba(X_test)[:, 1]
+    test_probs = best_model.predict_proba(X_test)  # shape (n, 3)
     test_preds = best_model.predict(X_test)
+    test_roc_auc = roc_auc_score(y_test, test_probs, multi_class="ovr", average="macro")
+    pr_auc_per_class = []
+    for cls in range(NUM_CLASSES):
+        if (y_test == cls).sum() > 0:
+            pr_auc_per_class.append(average_precision_score(
+                (y_test == cls).astype(int), test_probs[:, cls]
+            ))
+    test_pr_auc = float(np.mean(pr_auc_per_class)) if pr_auc_per_class else 0.0
     test_metrics = {
         "model": best_model_name,
-        "roc_auc": roc_auc_score(y_test, test_probs),
-        "pr_auc": average_precision_score(y_test, test_probs),
+        "roc_auc_macro": test_roc_auc,
+        "pr_auc_macro": test_pr_auc,
         "mcc": matthews_corrcoef(y_test, test_preds),
     }
 
     calibrated = CalibratedClassifierCV(best_model, method="isotonic", cv=3)
     calibrated.fit(np.vstack([X_train, X_val]), np.hstack([y_train, y_val]))
-    calibrated_probs = calibrated.predict_proba(X_test)[:, 1]
-    ece, mce = ece_score(y_test, calibrated_probs)
+    calibrated_probs = calibrated.predict_proba(X_test)  # shape (n, 3)
+    # ECE on the probability assigned to the true class
+    calibrated_probs_true = calibrated_probs[np.arange(len(y_test)), y_test]
+    ece, mce = ece_score(np.ones(len(y_test)), calibrated_probs_true)
     test_metrics["ece"] = ece
     test_metrics["mce"] = mce
 
@@ -345,34 +413,52 @@ def run_workflow() -> None:
         writer.writeheader()
         writer.writerow(test_metrics)
 
-    cm = confusion_matrix(y_test, test_preds)
-    fpr, tpr, roc_thresholds = roc_curve(y_test, test_probs)
-    pr_precision, pr_recall, pr_thresholds = precision_recall_curve(y_test, test_probs)
-    with (OUTPUT_DIR / "roc_curve.csv").open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=["fpr", "tpr", "threshold"])
-        writer.writeheader()
-        for fpr_val, tpr_val, threshold in zip(fpr, tpr, roc_thresholds):
-            writer.writerow({"fpr": fpr_val, "tpr": tpr_val, "threshold": threshold})
+    cm = confusion_matrix(y_test, test_preds, labels=list(range(NUM_CLASSES)))
 
-    with (OUTPUT_DIR / "pr_curve.csv").open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=["precision", "recall", "threshold"])
-        writer.writeheader()
-        thresholds = list(pr_thresholds) + [np.nan]
-        for precision, recall, threshold in zip(pr_precision, pr_recall, thresholds):
-            writer.writerow({"precision": precision, "recall": recall, "threshold": threshold})
+    # Per-class ROC and PR curves (one-vs-rest)
+    for cls in range(NUM_CLASSES):
+        cls_label = ACTIVITY_CLASS_MAP[cls]
+        binary_true = (y_test == cls).astype(int)
+        cls_probs = test_probs[:, cls]
+        if binary_true.sum() == 0:
+            continue
+        fpr, tpr, roc_thresholds = roc_curve(binary_true, cls_probs)
+        with (OUTPUT_DIR / f"roc_curve_{cls_label}.csv").open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=["fpr", "tpr", "threshold"])
+            writer.writeheader()
+            for fpr_val, tpr_val, threshold in zip(fpr, tpr, roc_thresholds):
+                writer.writerow({"fpr": fpr_val, "tpr": tpr_val, "threshold": threshold})
 
+        pr_precision, pr_recall, pr_thresholds = precision_recall_curve(binary_true, cls_probs)
+        with (OUTPUT_DIR / f"pr_curve_{cls_label}.csv").open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=["precision", "recall", "threshold"])
+            writer.writeheader()
+            thresholds_list = list(pr_thresholds) + [np.nan]
+            for precision, recall, threshold in zip(pr_precision, pr_recall, thresholds_list):
+                writer.writerow({"precision": precision, "recall": recall, "threshold": threshold})
+
+    # 3-class confusion matrix
     with (OUTPUT_DIR / "confusion_matrix.csv").open("w", newline="", encoding="utf-8") as handle:
         writer = csv.writer(handle)
-        writer.writerow(["", "pred_0", "pred_1"])
-        writer.writerow(["actual_0", cm[0, 0], cm[0, 1]])
-        writer.writerow(["actual_1", cm[1, 0], cm[1, 1]])
+        header = [""] + [f"pred_{ACTIVITY_CLASS_MAP[c]}" for c in range(NUM_CLASSES)]
+        writer.writerow(header)
+        for i in range(NUM_CLASSES):
+            row_data = [f"actual_{ACTIVITY_CLASS_MAP[i]}"] + [int(cm[i, j]) for j in range(NUM_CLASSES)]
+            writer.writerow(row_data)
 
-    prob_true, prob_pred = calibration_curve(y_test, calibrated_probs, n_bins=10)
-    with (OUTPUT_DIR / "calibration_curve.csv").open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=["mean_predicted_prob", "fraction_positives"])
-        writer.writeheader()
-        for mean_pred, frac_pos in zip(prob_pred, prob_true):
-            writer.writerow({"mean_predicted_prob": mean_pred, "fraction_positives": frac_pos})
+    # Calibration curve per class
+    for cls in range(NUM_CLASSES):
+        cls_label = ACTIVITY_CLASS_MAP[cls]
+        binary_true = (y_test == cls).astype(int)
+        cls_cal_probs = calibrated_probs[:, cls]
+        if binary_true.sum() == 0:
+            continue
+        prob_true, prob_pred = calibration_curve(binary_true, cls_cal_probs, n_bins=10)
+        with (OUTPUT_DIR / f"calibration_curve_{cls_label}.csv").open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=["mean_predicted_prob", "fraction_positives"])
+            writer.writeheader()
+            for mean_pred, frac_pos in zip(prob_pred, prob_true):
+                writer.writerow({"mean_predicted_prob": mean_pred, "fraction_positives": frac_pos})
 
     if hasattr(best_model.named_steps["model"], "feature_importances_"):
         importances = best_model.named_steps["model"].feature_importances_
@@ -484,11 +570,11 @@ def run_workflow() -> None:
         writer.writeheader()
         writer.writerows(mcda_rows)
 
+    class_counts = {ACTIVITY_CLASS_MAP[c]: int((labels == c).sum()) for c in range(NUM_CLASSES)}
     summary = {
         "n_compounds": len(df),
         "targets": len({row["target_common_name"] for row in df}),
-        "actives": int(sum(row["is_active"] for row in df)),
-        "inactives": int(sum(1 for row in df if row["is_active"] == 0)),
+        "class_distribution": class_counts,
         "train_size": len(X_train),
         "val_size": len(X_val),
         "test_size": len(X_test),
@@ -507,7 +593,7 @@ def run_workflow() -> None:
         with public_path.open(newline="", encoding="utf-8") as handle:
             reader = csv.DictReader(handle)
             for row in reader:
-                row["is_active"] = int(row["is_active"])
+                row["activity_class"] = int(row["activity_class"])
                 public_rows.append(row)
         overlap = set(zip([row["canonical_smiles"] for row in public_rows],
                           [row["target_common_name"] for row in public_rows])) & set(
@@ -519,22 +605,30 @@ def run_workflow() -> None:
             public_rows,
             selected_columns=selected_columns,
         )
-        public_probs = best_model.predict_proba(public_features)[:, 1]
+        public_probs = best_model.predict_proba(public_features)  # shape (n, 3)
         public_preds = best_model.predict(public_features)
         with (OUTPUT_DIR / "public_test_predictions.csv").open("w", newline="", encoding="utf-8") as handle:
-            fieldnames = list(public_rows[0].keys()) + ["predicted_prob_active", "predicted_label"]
+            prob_fields = [f"prob_{ACTIVITY_CLASS_MAP[c]}" for c in range(NUM_CLASSES)]
+            fieldnames = list(public_rows[0].keys()) + prob_fields + ["predicted_class", "predicted_label"]
             writer = csv.DictWriter(handle, fieldnames=fieldnames)
             writer.writeheader()
-            for row, prob, pred in zip(public_rows, public_probs, public_preds):
+            for row, probs_row, pred in zip(public_rows, public_probs, public_preds):
                 output_row = dict(row)
-                output_row["predicted_prob_active"] = float(prob)
-                output_row["predicted_label"] = int(pred)
+                for c in range(NUM_CLASSES):
+                    output_row[f"prob_{ACTIVITY_CLASS_MAP[c]}"] = float(probs_row[c])
+                output_row["predicted_class"] = int(pred)
+                output_row["predicted_label"] = ACTIVITY_CLASS_MAP.get(int(pred), "unknown")
                 writer.writerow(output_row)
+        if len(np.unique(public_labels)) > 1:
+            public_roc = roc_auc_score(public_labels, public_probs, multi_class="ovr", average="macro")
+        else:
+            public_roc = float("nan")
         public_metrics = {
-            "roc_auc": roc_auc_score(public_labels, public_probs),
-            "pr_auc": average_precision_score(public_labels, public_probs),
+            "roc_auc_macro": public_roc,
             "mcc": matthews_corrcoef(public_labels, public_preds),
-            "confusion_matrix": confusion_matrix(public_labels, public_preds).tolist(),
+            "confusion_matrix": confusion_matrix(
+                public_labels, public_preds, labels=list(range(NUM_CLASSES))
+            ).tolist(),
         }
         with open(OUTPUT_DIR / "public_test_metrics.json", "w", encoding="utf-8") as handle:
             json.dump(public_metrics, handle, indent=2)

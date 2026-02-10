@@ -181,10 +181,20 @@ def clean_and_preprocess_data(df: pd.DataFrame) -> pd.DataFrame:
     if 'canonical_smiles' in df.columns:
         df = df[df['canonical_smiles'].notna()].copy()
     
-    # Add binary classification labels (active/inactive)
-    # Typically, pChEMBL >= 6 (1 µM or better) is considered active
+    # Three-class activity labels:
+    #   2 = potent      (pChEMBL >= 5.0, i.e. < 10 µM)
+    #   1 = less_potent  (4.0 <= pChEMBL < 5.0, i.e. 10-100 µM)
+    #   0 = inactive     (confirmed-inactive compounds added separately)
+    # Records reaching this point have pChEMBL >= 4.0 (quality filter).
     if 'pchembl_value' in df.columns:
-        df['is_active'] = (df['pchembl_value'] >= 6.0).astype(int)
+        df['activity_class'] = df['pchembl_value'].apply(
+            lambda x: 2 if x >= 5.0 else 1
+        )
+        df['activity_class_label'] = df['activity_class'].map(
+            {2: 'potent', 1: 'less_potent', 0: 'inactive'}
+        )
+        # Keep is_active for backward compatibility
+        df['is_active'] = (df['pchembl_value'] >= 5.0).astype(int)
     
     print(f"Records after cleaning: {len(df)}")
     
@@ -209,16 +219,26 @@ def generate_summary_statistics(df: pd.DataFrame) -> pd.DataFrame:
     if len(df) == 0:
         return pd.DataFrame()
     
-    summary = df.groupby(['safety_category', 'target_common_name', 'activity_type']).agg({
+    agg_dict = {
         'molecule_chembl_id': 'count',
         'pchembl_value': ['mean', 'std', 'min', 'max'],
-        'is_active': 'sum'
-    }).round(2)
-    
-    summary.columns = ['_'.join(col).strip() for col in summary.columns.values]
+    }
+    if 'activity_class' in df.columns:
+        agg_dict['activity_class'] = [
+            lambda x: (x == 2).sum(),  # n_potent
+            lambda x: (x == 1).sum(),  # n_less_potent
+            lambda x: (x == 0).sum(),  # n_inactive
+        ]
+    else:
+        agg_dict['is_active'] = 'sum'
+
+    summary = df.groupby(['safety_category', 'target_common_name', 'activity_type']).agg(
+        agg_dict
+    ).round(2)
+
+    summary.columns = ['_'.join(str(c) for c in col).strip() for col in summary.columns.values]
     summary = summary.rename(columns={
         'molecule_chembl_id_count': 'n_compounds',
-        'is_active_sum': 'n_active'
     })
     
     return summary.reset_index()
