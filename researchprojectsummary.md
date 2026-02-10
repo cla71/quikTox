@@ -5,7 +5,7 @@ This run follows the EXECUTIVE_SUMMARY.txt workflow using `/safety_targets_bioac
 
 ## Data Preparation
 - **Input dataset**: 2,111 compound-target records across 6 safety targets after filtering for exact measurements, valid pChEMBL values (≥4), and canonical SMILES.
-- **Activity labeling**: Compounds labeled active at pChEMBL ≥ 6.
+- **Activity labeling**: Three-class system — potent (pChEMBL >= 5.0, < 10 µM), less potent (4.0 <= pChEMBL < 5.0, 10-100 µM), and inactive (confirmed-inactive compounds retrieved from ChEMBL with diversity filtering).
 - **Split strategy**: Scaffold-based 60/20/20 split into train/validation/test sets.
 
 ## Feature Engineering
@@ -57,7 +57,7 @@ Key outputs in `OFFTOXv2/workflow_outputs/` after running the workflow:
 - `cv_summary.csv`, `test_metrics.csv`, `mcda_ranking.csv`
 - `workflow_summary.json`, `conformal_summary.json`, `statistical_comparison.csv`
 - `conformal_set_sizes.csv`, `conformal_set_sizes_summary.csv`
-- `roc_curve.csv`, `pr_curve.csv`, `calibration_curve.csv`, `confusion_matrix.csv`
+- `roc_curve_{class}.csv`, `pr_curve_{class}.csv`, `calibration_curve_{class}.csv`, `confusion_matrix.csv`
 - `feature_importance.csv`, `public_test_predictions.csv`, `public_test_metrics.json`
 
 ## Public Test Set

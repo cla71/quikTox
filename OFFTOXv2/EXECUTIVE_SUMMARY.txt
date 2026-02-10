@@ -37,8 +37,16 @@ Other Safety (2):
 
 DATA SPECIFICATIONS:
   - Activity types: IC50, Ki (standard potency measures)
-  - Minimum quality: pChEMBL ≥ 4 (10 µM or better)
-  - Activity cutoff: pChEMBL ≥ 6 (1 µM) for "active" classification
+  - Three-class classification:
+      Class 2 – Potent:      pChEMBL >= 5.0 (< 10 µM)
+      Class 1 – Less potent: 4.0 <= pChEMBL < 5.0 (10-100 µM)
+      Class 0 – Inactive:    Confirmed-inactive compounds with no
+                              measurable activity (right-censored '>'
+                              measurements at >= 10 µM, or explicit
+                              'Not Active' annotations in ChEMBL).
+                              Collected per-target with diversity
+                              filtering across Murcko scaffolds.
+  - Minimum quality for measured compounds: pChEMBL >= 4.0 (100 µM)
   - Expected total compounds: ~50,000-100,000 unique structures
   - Expected measurements: ~200,000-500,000 bioactivity records
 """
