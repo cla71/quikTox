@@ -1,7 +1,7 @@
-compound_name,canonical_smiles,target_common_name,is_active,source,predicted_prob_active,predicted_label
-Caffeine,Cn1cnc2n(C)c(=O)n(C)c(=O)c12,CYP1A2,1,Literature substrate/inhibitor,0.042075224220752716,0
-Propranolol,CC(C)NCC(O)COC1=CC=CC=C1,CYP2D6,1,Literature substrate,0.009819692932069302,0
-Verapamil,COC1=CC=CC=C1C(CN(C)CC)CCOC2=CC=CC=C2OC,Cav1.2,1,Literature calcium channel blocker,0.07298392057418823,0
-Acetaminophen,CC(=O)NC1=CC=C(O)C=C1O,CYP3A4,0,Public data non-inhibitor,0.00795804150402546,0
-Glycine,NCC(=O)O,Nav1.5,0,Small amino acid control,0.01642679050564766,0
-Sorbitol,C(C(C(C(C(CO)O)O)O)O)O,hERG,0,Polyol control,0.024295208975672722,0
+compound_name,canonical_smiles,target_common_name,activity_class,activity_class_label,source,prob_inactive,prob_less_potent,prob_potent,predicted_class,predicted_label
+Caffeine,Cn1cnc2n(C)c(=O)n(C)c(=O)c12,CYP1A2,2,potent,Literature substrate/inhibitor,0.0015713706379756331,0.9043089151382446,0.09411973506212234,1,less_potent
+Propranolol,CC(C)NCC(O)COC1=CC=CC=C1,CYP2D6,2,potent,Literature substrate,0.002761568408459425,0.859138548374176,0.13809990882873535,1,less_potent
+Verapamil,COC1=CC=CC=C1C(CN(C)CC)CCOC2=CC=CC=C2OC,Cav1.2,2,potent,Literature calcium channel blocker,0.00011121483112219721,0.09085944294929504,0.9090293049812317,2,potent
+Acetaminophen,CC(=O)NC1=CC=C(O)C=C1O,CYP3A4,0,inactive,Public data non-inhibitor,0.9953486323356628,0.0041991230100393295,0.0004523042880464345,0,inactive
+Glycine,NCC(=O)O,Nav1.5,0,inactive,Small amino acid control,0.9991151690483093,0.0004343357577454299,0.0004505258984863758,0,inactive
+Sorbitol,C(C(C(C(C(CO)O)O)O)O)O,hERG,0,inactive,Polyol control,0.9981576800346375,0.001332741347141564,0.0005096279201097786,0,inactive

@@ -326,7 +326,7 @@ def run_workflow() -> None:
             scoring="roc_auc_ovr",
             cv=3,
             random_state=RANDOM_STATE,
-            n_jobs=-1,
+            n_jobs=1,
         )
         start = time.time()
         search.fit(X_train, y_train)
@@ -619,8 +619,17 @@ def run_workflow() -> None:
                 output_row["predicted_class"] = int(pred)
                 output_row["predicted_label"] = ACTIVITY_CLASS_MAP.get(int(pred), "unknown")
                 writer.writerow(output_row)
-        if len(np.unique(public_labels)) > 1:
+        unique_public = np.unique(public_labels)
+        if len(unique_public) > 1 and len(unique_public) == NUM_CLASSES:
             public_roc = roc_auc_score(public_labels, public_probs, multi_class="ovr", average="macro")
+        elif len(unique_public) > 1:
+            # Not all classes present – compute per-class OVR AUC for present classes
+            per_class_aucs = []
+            for cls in unique_public:
+                binary = (public_labels == cls).astype(int)
+                if binary.sum() > 0 and binary.sum() < len(binary):
+                    per_class_aucs.append(roc_auc_score(binary, public_probs[:, cls]))
+            public_roc = float(np.mean(per_class_aucs)) if per_class_aucs else float("nan")
         else:
             public_roc = float("nan")
         public_metrics = {
