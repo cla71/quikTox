@@ -1,0 +1,9 @@
+compound_id,smiles,target
+CPD001,c1ccc2c(c1)cc(=O)oc2,hERG
+CPD002,CC(=O)Oc1ccccc1C(=O)O,CYP3A4
+CPD003,CN1C=NC2=C1C(=O)N(C(=O)N2C)C,CYP1A2
+CPD004,CC(C)NCC(O)c1ccc(O)c(O)c1,CYP2D6
+CPD005,COc1ccc(CCN(C)CCCC(C#N)(c2ccc(OC)c(OC)c2)C(C)C)cc1OC,Cav1.2
+CPD006,OC[C@H]1OC(O)[C@H](O)[C@@H](O)[C@@H]1O,hERG
+CPD007,c1ccc(NC(=O)c2ccccc2)cc1,Nav1.5
+CPD008,CC(=O)NC1=CC=C(O)C=C1,CYP2C9
