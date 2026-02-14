@@ -1,0 +1,37 @@
+{
+  "n_compounds": 2458,
+  "targets": [
+    "AR",
+    "CYP1A2",
+    "CYP2D6",
+    "CYP3A4",
+    "Cav1.2",
+    "ERa",
+    "GR",
+    "Nav1.5",
+    "PPARg",
+    "PR",
+    "PXR",
+    "RXRa",
+    "hERG"
+  ],
+  "class_distribution": {
+    "inactive": 274,
+    "less_potent": 675,
+    "potent": 1509
+  },
+  "train_size": 1474,
+  "val_size": 491,
+  "test_size": 493,
+  "best_model": "RandomForest",
+  "test_metrics": {
+    "roc_auc_macro": 0.8703500961768545,
+    "pr_auc_macro": 0.7969498992374896,
+    "mcc": 0.4323209276155848,
+    "ece": 0.3381113672885216,
+    "mce": 0.9552364847563557
+  },
+  "conformal_coverage": 0.9513184584178499,
+  "avg_prediction_set_size": 1.5456389452332657,
+  "out_of_domain_rate": 0.1845841784989858
+}

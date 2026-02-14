@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OFFTOXv3 Validation Report</title>
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+  <style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background: #f0f2f5;
+  color: #333;
+  line-height: 1.6;
+}
+.header {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  color: #fff;
+  padding: 40px 32px 32px;
+  text-align: center;
+}
+.header h1 { font-size: 1.8rem; margin-bottom: 8px; }
+.header .sub { font-size: 0.95rem; color: #b0c4de; }
+.card {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+  padding: 28px 32px;
+  margin: 24px auto;
+  max-width: 1200px;
+}
+.card h2 {
+  font-size: 1.35rem;
+  margin-bottom: 16px;
+  color: #1a1a2e;
+  border-bottom: 2px solid #e8e8e8;
+  padding-bottom: 8px;
+}
+.card h3 {
+  font-size: 1.1rem;
+  margin: 18px 0 8px;
+  color: #16213e;
+}
+.card p, .card li {
+  margin-bottom: 8px;
+  font-size: 0.97rem;
+}
+.card ul { margin-left: 24px; }
+.metrics-grid {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 12px 0 18px;
+}
+.metric-box {
+  background: #f7f9fc;
+  border: 1px solid #e0e5ec;
+  border-radius: 8px;
+  padding: 16px 22px;
+  text-align: center;
+  min-width: 140px;
+  flex: 1;
+}
+.metric-value {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #0f3460;
+}
+.metric-label {
+  display: block;
+  font-size: 0.82rem;
+  color: #666;
+  margin-top: 4px;
+}
+/* Table styles */
+.table-wrap { overflow-x: auto; }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  margin-top: 8px;
+}
+th {
+  background: #16213e;
+  color: #fff;
+  padding: 10px 12px;
+  text-align: left;
+  white-space: nowrap;
+}
+td { padding: 8px 12px; border-bottom: 1px solid #eee; }
+.smiles { font-family: monospace; font-size: 0.82rem; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row-correct { background: #c6efce; }
+.row-incorrect { background: #ffc7ce; }
+.row-unknown { background: #fff3cd; }
+.correct-icon { color: #27ae60; font-weight: bold; text-align: center; }
+.wrong-icon { color: #e74c3c; font-weight: bold; text-align: center; }
+.legend { margin-bottom: 12px; }
+.legend-item { display: inline-block; margin-right: 20px; font-size: 0.88rem; }
+.swatch { display: inline-block; width: 16px; height: 16px; border-radius: 3px; vertical-align: middle; margin-right: 4px; border: 1px solid #ccc; }
+footer {
+  text-align: center;
+  padding: 24px;
+  font-size: 0.82rem;
+  color: #888;
+}
+@media (max-width: 768px) {
+  .card { padding: 16px; margin: 12px 8px; }
+  .metrics-grid { flex-direction: column; }
+  .header h1 { font-size: 1.3rem; }
+}
+</style>
+</head>
+<body>
+
+    <div class="header">
+      <h1>OFFTOXv3 Validation Report &mdash; Safety Pharmacology &amp; NHR Predictions</h1>
+      <p class="sub">Generated 2026-02-14 23:17:44 &nbsp;|&nbsp; Model: <strong>RandomForest</strong></p>
+    </div>
+
+    <div class="card">
+      <h2>Model &amp; Training Summary</h2>
+      <div class="metrics-grid">
+        <div class="metric-box">
+          <span class="metric-value">2458</span>
+          <span class="metric-label">Training compounds</span>
+        </div>
+        <div class="metric-box">
+          <span class="metric-value">13</span>
+          <span class="metric-label">Targets</span>
+        </div>
+        <div class="metric-box">
+          <span class="metric-value">1474 / 491 / 493</span>
+          <span class="metric-label">Train / Val / Test split</span>
+        </div>
+      </div>
+      <p><strong>Targets:</strong> AR, CYP1A2, CYP2D6, CYP3A4, Cav1.2, ERa, GR, Nav1.5, PPARg, PR, PXR, RXRa, hERG</p>
+      <p><strong>Class distribution:</strong>
+         Inactive&nbsp;274 &nbsp;|&nbsp;
+         Less-potent&nbsp;675 &nbsp;|&nbsp;
+         Potent&nbsp;1509</p>
+
+      <h3>Test-Set Performance</h3>
+      <div class="metrics-grid">
+        <div class="metric-box">
+          <span class="metric-value">0.8704</span>
+          <span class="metric-label">ROC-AUC (macro)</span>
+        </div>
+        <div class="metric-box">
+          <span class="metric-value">0.7969</span>
+          <span class="metric-label">PR-AUC (macro)</span>
+        </div>
+        <div class="metric-box">
+          <span class="metric-value">0.4323</span>
+          <span class="metric-label">MCC</span>
+        </div>
+        <div class="metric-box">
+          <span class="metric-value">0.3381</span>
+          <span class="metric-label">ECE</span>
+        </div>
+      </div>
+    </div>
+    
+
+    <div class="card">
+      <h2>1 &mdash; Compound Profiles</h2>
+      <div class="legend">
+        <span class="legend-item"><span class="swatch" style="background:#c6efce"></span> Correct prediction</span>
+        <span class="legend-item"><span class="swatch" style="background:#ffc7ce"></span> Incorrect prediction</span>
+        <span class="legend-item"><span class="swatch" style="background:#fff3cd"></span> No known class</span>
+      </div>
+      <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th><th>Name</th><th>Target</th><th>SMILES</th>
+            <th>Known Class</th><th>Predicted</th><th>Confidence</th>
+            <th>In Domain</th><th>Conformal Set</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+        <tr class="row-incorrect">
+          <td>VAL001</td>
+          <td>Terbutaline</td>
+          <td>hERG</td>
+          <td class="smiles" title="CC(CC1=CC=CC=C1)NCC(O)C1=CC(O)=CC(O)=C1">CC(CC1=CC=CC=C1)NCC(O)C1=CC(O)=CC(O)=C1</td>
+          <td>Less Potent</td>
+          <td>Potent</td>
+          <td>0.566</td>
+          <td>Yes</td>
+          <td>{less_potent, potent}</td>
+        </tr>
+        <tr class="row-correct">
+          <td>VAL002</td>
+          <td>Haloperidol</td>
+          <td>hERG</td>
+          <td class="smiles" title="COC1=CC=C(C(=O)CCCN2CCC(O)(C3=CC=C(Cl)CC3)CC2)C=C1OC">COC1=CC=C(C(=O)CCCN2CCC(O)(C3=CC=C(Cl)CC3)...</td>
+          <td>Potent</td>
+          <td>Potent</td>
+          <td>0.858</td>
+          <td>Yes</td>
+          <td>{potent}</td>
+        </tr>
+        <tr class="row-correct">
+          <td>VAL003</td>
+          <td>Verapamil_analog</td>
+          <td>Cav1.2</td>
+          <td class="smiles" title="COC1=CC=C(CCN(C)CCCC(C#N)(C2=CC=C(OC)C(OC)=C2)C(C)C)C=C1OC">COC1=CC=C(CCN(C)CCCC(C#N)(C2=CC=C(OC)C(OC)...</td>
+          <td>Potent</td>
+          <td>Potent</td>
+          <td>0.934</td>
+          <td>Yes</td>
+          <td>{potent}</td>
+        </tr>
+        <tr class="row-correct">
+          <td>VAL004</td>
+          <td>Imatinib_analog</td>
+          <td>CYP3A4</td>
+          <td class="smiles" title="CC1=C(CC2=CC=C(NC3=NC=CC(=N3)C3=CN=CC=C3)C=C2)C2=CC(F)=CC=C2N1C1CCC(=O)NC1=O">CC1=C(CC2=CC=C(NC3=NC=CC(=N3)C3=CN=CC=C3)C...</td>
+          <td>Potent</td>
+          <td>Potent</td>
+          <td>0.608</td>
+          <td>Yes</td>
+          <td>{less_potent, potent}</td>
+        </tr>
+        <tr class="row-correct">
+          <td>VAL005</td>
+          <td>Caffeine_methyl</td>
+          <td>CYP1A2</td>
+          <td class="smiles" title="CN1C2=C(C(=O)N(CC)C1=O)N=CN2C">CN1C2=C(C(=O)N(CC)C1=O)N=CN2C</td>
+          <td>Potent</td>
+          <td>Potent</td>
+          <td>0.462</td>
+          <td>Yes</td>
+          <td>{less_potent, potent}</td>
+        </tr>
+        <tr class="row-incorrect">
+          <td>VAL006</td>
+          <td>Luteolin</td>
+          <td>PPARg</td>
+          <td class="smiles" title="OC1=CC(=CC(O)=C1)C1=CC(=O)C2=C(O)C=C(O)C=C2O1">OC1=CC(=CC(O)=C1)C1=CC(=O)C2=C(O)C=C(O)C=C2O1</td>
+          <td>Less Potent</td>
+          <td>Potent</td>
+          <td>0.516</td>
+          <td>No</td>
+          <td>{less_potent, potent}</td>
+        </tr>
+        <tr class="row-correct">
+          <td>VAL007</td>
+          <td>Arzoxifene_fragment</td>
+          <td>ERa</td>
+          <td class="smiles" title="CC(=O)OC1=CC2=C(S1)CCN(C)C2">CC(=O)OC1=CC2=C(S1)CCN(C)C2</td>
+          <td>Potent</td>
+          <td>Potent</td>
+          <td>0.536</td>
+          <td>Yes</td>
+          <td>{less_potent, potent}</td>
+        </tr>
+        <tr class="row-correct">
+          <td>VAL008</td>
+          <td>Honokiol</td>
+          <td>PPARg</td>
+          <td class="smiles" title="CC(C)C1=CC(=CC(C(C)C)=C1O)C1=CC=CC=C1">CC(C)C1=CC(=CC(C(C)C)=C1O)C1=CC=CC=C1</td>
+          <td>Potent</td>
+          <td>Potent</td>
+          <td>0.646</td>
+          <td>Yes</td>
+          <td>{less_potent, potent}</td>
+        </tr>
+        <tr class="row-correct">
+          <td>VAL009</td>
+          <td>6-OH-chrysin_deriv</td>
+          <td>RXRa</td>
+          <td class="smiles" title="CC1=CC2=CC3=C(C=C2C(C)=C1)C(=O)CC(C)(C)O3">CC1=CC2=CC3=C(C=C2C(C)=C1)C(=O)CC(C)(C)O3</td>
+          <td>Potent</td>
+          <td>Potent</td>
+          <td>0.604</td>
+          <td>Yes</td>
+          <td>{less_potent, potent}</td>
+        </tr>
+        <tr class="row-incorrect">
+          <td>VAL010</td>
+          <td>Acetaminophen_CYP2D6</td>
+          <td>CYP2D6</td>
+          <td class="smiles" title="CC(=O)NC1=CC=C(O)C=C1">CC(=O)NC1=CC=C(O)C=C1</td>
+          <td>Less Potent</td>
+          <td>Inactive</td>
+          <td>0.943</td>
+          <td>Yes</td>
+          <td>{inactive}</td>
+        </tr>
+        <tr class="row-correct">
+          <td>VAL_NEG01</td>
+          <td>Mannitol</td>
+          <td>hERG</td>
+          <td class="smiles" title="OCC(O)C(O)C(O)C(O)CO">OCC(O)C(O)C(O)C(O)CO</td>
+          <td>Inactive</td>
+          <td>Inactive</td>
+          <td>0.998</td>
+          <td>Yes</td>
+          <td>{inactive}</td>
+        </tr>
+        <tr class="row-correct">
+          <td>VAL_NEG02</td>
+          <td>Gluconic_acid</td>
+          <td>CYP3A4</td>
+          <td class="smiles" title="OC(=O)C(O)C(O)C(O)C(O)CO">OC(=O)C(O)C(O)C(O)C(O)CO</td>
+          <td>Inactive</td>
+          <td>Inactive</td>
+          <td>0.925</td>
+          <td>Yes</td>
+          <td>{inactive}</td>
+        </tr>
+        <tr class="row-correct">
+          <td>VAL_NEG03</td>
+          <td>Glycylglycine</td>
+          <td>Nav1.5</td>
+          <td class="smiles" title="NCC(=O)NCC(=O)O">NCC(=O)NCC(=O)O</td>
+          <td>Inactive</td>
+          <td>Inactive</td>
+          <td>0.910</td>
+          <td>Yes</td>
+          <td>{inactive}</td>
+        </tr>
+        <tr class="row-correct">
+          <td>VAL_NEG04</td>
+          <td>Galactose</td>
+          <td>PPARg</td>
+          <td class="smiles" title="OCC1OC(O)C(O)C(O)C1O">OCC1OC(O)C(O)C(O)C1O</td>
+          <td>Inactive</td>
+          <td>Inactive</td>
+          <td>1.000</td>
+          <td>Yes</td>
+          <td>{inactive}</td>
+        </tr>
+        <tr class="row-correct">
+          <td>VAL_NEG05</td>
+          <td>Lactic_acid</td>
+          <td>GR</td>
+          <td class="smiles" title="CC(O)C(=O)O">CC(O)C(=O)O</td>
+          <td>Inactive</td>
+          <td>Inactive</td>
+          <td>0.996</td>
+          <td>Yes</td>
+          <td>{inactive}</td>
+        </tr>
+        <tr class="row-correct">
+          <td>VAL_NEG06</td>
+          <td>Lysine</td>
+          <td>AR</td>
+          <td class="smiles" title="NCCCCC(N)C(=O)O">NCCCCC(N)C(=O)O</td>
+          <td>Inactive</td>
+          <td>Inactive</td>
+          <td>0.873</td>
+          <td>No</td>
+          <td>{inactive}</td>
+        </tr>
+        <tr class="row-correct">
+          <td>VAL_NEG07</td>
+          <td>Malic_acid</td>
+          <td>ERa</td>
+          <td class="smiles" title="OC(CC(=O)O)C(=O)O">OC(CC(=O)O)C(=O)O</td>
+          <td>Inactive</td>
+          <td>Inactive</td>
+          <td>0.973</td>
+          <td>Yes</td>
+          <td>{inactive}</td>
+        </tr>
+        </tbody>
+      </table>
+      </div>
+    </div>
+    
+
+    <div class="card">
+      <h2>2 &mdash; Prediction Accuracy</h2>
+      <div class="metrics-grid">
+        <div class="metric-box">
+          <span class="metric-value">14/17</span>
+          <span class="metric-label">Correct</span>
+        </div>
+        <div class="metric-box">
+          <span class="metric-value">82.4%</span>
+          <span class="metric-label">Overall Accuracy</span>
+        </div>
+      </div>
+      <h3>Per-Class Accuracy</h3>
+      <ul><li><strong>Inactive</strong>: 7/7 correct (100%)</li><li><strong>Less Potent</strong>: 0/3 correct (0%)</li><li><strong>Potent</strong>: 7/7 correct (100%)</li></ul>
+      <div>                            <div id="3f128055-a943-4d96-b940-1e24703a34db" class="plotly-graph-div" style="height:420px; width:100%;"></div>            <script type="text/javascript">                window.PLOTLYENV=window.PLOTLYENV || {};                                if (document.getElementById("3f128055-a943-4d96-b940-1e24703a34db")) {                    Plotly.newPlot(                        "3f128055-a943-4d96-b940-1e24703a34db",                        [{"colorscale":[[0.0,"rgb(247,251,255)"],[0.125,"rgb(222,235,247)"],[0.25,"rgb(198,219,239)"],[0.375,"rgb(158,202,225)"],[0.5,"rgb(107,174,214)"],[0.625,"rgb(66,146,198)"],[0.75,"rgb(33,113,181)"],[0.875,"rgb(8,81,156)"],[1.0,"rgb(8,48,107)"]],"hovertemplate":"Actual: %{y}\u003cbr\u003ePredicted: %{x}\u003cbr\u003eCount: %{z}\u003cextra\u003e\u003c\u002fextra\u003e","text":{"dtype":"i1","bdata":"BwAAAQACAAAH","shape":"3, 3"},"textfont":{"size":18},"texttemplate":"%{text}","x":["Inactive","Less Potent","Potent"],"y":["Inactive","Less Potent","Potent"],"z":{"dtype":"i1","bdata":"BwAAAQACAAAH","shape":"3, 3"},"type":"heatmap"}],                        {"template":{"data":{"barpolar":[{"marker":{"line":{"color":"white","width":0.5},"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"barpolar"}],"bar":[{"error_x":{"color":"#2a3f5f"},"error_y":{"color":"#2a3f5f"},"marker":{"line":{"color":"white","width":0.5},"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"bar"}],"carpet":[{"aaxis":{"endlinecolor":"#2a3f5f","gridcolor":"#C8D4E3","linecolor":"#C8D4E3","minorgridcolor":"#C8D4E3","startlinecolor":"#2a3f5f"},"baxis":{"endlinecolor":"#2a3f5f","gridcolor":"#C8D4E3","linecolor":"#C8D4E3","minorgridcolor":"#C8D4E3","startlinecolor":"#2a3f5f"},"type":"carpet"}],"choropleth":[{"colorbar":{"outlinewidth":0,"ticks":""},"type":"choropleth"}],"contourcarpet":[{"colorbar":{"outlinewidth":0,"ticks":""},"type":"contourcarpet"}],"contour":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"contour"}],"heatmap":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"heatmap"}],"histogram2dcontour":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"histogram2dcontour"}],"histogram2d":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"histogram2d"}],"histogram":[{"marker":{"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"histogram"}],"mesh3d":[{"colorbar":{"outlinewidth":0,"ticks":""},"type":"mesh3d"}],"parcoords":[{"line":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"parcoords"}],"pie":[{"automargin":true,"type":"pie"}],"scatter3d":[{"line":{"colorbar":{"outlinewidth":0,"ticks":""}},"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scatter3d"}],"scattercarpet":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattercarpet"}],"scattergeo":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattergeo"}],"scattergl":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattergl"}],"scattermapbox":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattermapbox"}],"scattermap":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattermap"}],"scatterpolargl":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scatterpolargl"}],"scatterpolar":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scatterpolar"}],"scatter":[{"fillpattern":{"fillmode":"overlay","size":10,"solidity":0.2},"type":"scatter"}],"scatterternary":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scatterternary"}],"surface":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"surface"}],"table":[{"cells":{"fill":{"color":"#EBF0F8"},"line":{"color":"white"}},"header":{"fill":{"color":"#C8D4E3"},"line":{"color":"white"}},"type":"table"}]},"layout":{"annotationdefaults":{"arrowcolor":"#2a3f5f","arrowhead":0,"arrowwidth":1},"autotypenumbers":"strict","coloraxis":{"colorbar":{"outlinewidth":0,"ticks":""}},"colorscale":{"diverging":[[0,"#8e0152"],[0.1,"#c51b7d"],[0.2,"#de77ae"],[0.3,"#f1b6da"],[0.4,"#fde0ef"],[0.5,"#f7f7f7"],[0.6,"#e6f5d0"],[0.7,"#b8e186"],[0.8,"#7fbc41"],[0.9,"#4d9221"],[1,"#276419"]],"sequential":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"sequentialminus":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]},"colorway":["#636efa","#EF553B","#00cc96","#ab63fa","#FFA15A","#19d3f3","#FF6692","#B6E880","#FF97FF","#FECB52"],"font":{"color":"#2a3f5f"},"geo":{"bgcolor":"white","lakecolor":"white","landcolor":"white","showlakes":true,"showland":true,"subunitcolor":"#C8D4E3"},"hoverlabel":{"align":"left"},"hovermode":"closest","mapbox":{"style":"light"},"paper_bgcolor":"white","plot_bgcolor":"white","polar":{"angularaxis":{"gridcolor":"#EBF0F8","linecolor":"#EBF0F8","ticks":""},"bgcolor":"white","radialaxis":{"gridcolor":"#EBF0F8","linecolor":"#EBF0F8","ticks":""}},"scene":{"xaxis":{"backgroundcolor":"white","gridcolor":"#DFE8F3","gridwidth":2,"linecolor":"#EBF0F8","showbackground":true,"ticks":"","zerolinecolor":"#EBF0F8"},"yaxis":{"backgroundcolor":"white","gridcolor":"#DFE8F3","gridwidth":2,"linecolor":"#EBF0F8","showbackground":true,"ticks":"","zerolinecolor":"#EBF0F8"},"zaxis":{"backgroundcolor":"white","gridcolor":"#DFE8F3","gridwidth":2,"linecolor":"#EBF0F8","showbackground":true,"ticks":"","zerolinecolor":"#EBF0F8"}},"shapedefaults":{"line":{"color":"#2a3f5f"}},"ternary":{"aaxis":{"gridcolor":"#DFE8F3","linecolor":"#A2B1C6","ticks":""},"baxis":{"gridcolor":"#DFE8F3","linecolor":"#A2B1C6","ticks":""},"bgcolor":"white","caxis":{"gridcolor":"#DFE8F3","linecolor":"#A2B1C6","ticks":""}},"title":{"x":0.05},"xaxis":{"automargin":true,"gridcolor":"#EBF0F8","linecolor":"#EBF0F8","ticks":"","title":{"standoff":15},"zerolinecolor":"#EBF0F8","zerolinewidth":2},"yaxis":{"automargin":true,"gridcolor":"#EBF0F8","linecolor":"#EBF0F8","ticks":"","title":{"standoff":15},"zerolinecolor":"#EBF0F8","zerolinewidth":2}}},"yaxis":{"title":{"text":"Actual Class"},"autorange":"reversed"},"margin":{"l":80,"r":40,"t":60,"b":60},"title":{"text":"Confusion Matrix (Validation Compounds)"},"xaxis":{"title":{"text":"Predicted Class"}},"height":420},                        {"responsive": true}                    )                };            </script>        </div>
+      <h3>Misclassified Compounds</h3><ul><li><strong>Terbutaline</strong> (VAL001, hERG): known=Less Potent, predicted=Potent, confidence=0.566</li><li><strong>Luteolin</strong> (VAL006, PPARg): known=Less Potent, predicted=Potent, confidence=0.516</li><li><strong>Acetaminophen_CYP2D6</strong> (VAL010, CYP2D6): known=Less Potent, predicted=Inactive, confidence=0.943</li></ul>
+    </div>
+    
+
+    <div class="card">
+      <h2>3 &mdash; Probability Distributions</h2>
+      <p>Grouped bar chart showing the three predicted class probabilities for each
+         validation compound. Hover for exact values.</p>
+      <div>                            <div id="83476967-368c-464b-ad1b-f22715959ca4" class="plotly-graph-div" style="height:520px; width:100%;"></div>            <script type="text/javascript">                window.PLOTLYENV=window.PLOTLYENV || {};                                if (document.getElementById("83476967-368c-464b-ad1b-f22715959ca4")) {                    Plotly.newPlot(                        "83476967-368c-464b-ad1b-f22715959ca4",                        [{"hovertemplate":"\u003cb\u003e%{x}\u003c\u002fb\u003e\u003cbr\u003eInactive: %{y:.4f}\u003cextra\u003e\u003c\u002fextra\u003e","marker":{"color":"#2ecc71"},"name":"Inactive","x":["Terbutaline","Haloperidol","Verapamil_analog","Imatinib_analog","Caffeine_methyl","Luteolin","Arzoxifene_fragment","Honokiol","6-OH-chrysin_deriv","Acetaminophen_CYP2D6","Mannitol","Gluconic_acid","Glycylglycine","Galactose","Lactic_acid","Lysine","Malic_acid"],"y":{"dtype":"f8","bdata":"ODoDQwLmoT\u002fmb+dJAFJeP7SLGs3lDTs\u002fFtucMgDDPD8yuK83YDe7P4kbaPJjv78\u002f4Xh1ItAAxD\u002fNOq41Ub2ZP6Nn\u002fltWTao\u002fjqnG6Ggu7j87umcCJe7vP9weZMfNmO0\u002fxuoKa0kd7T+8BG1nV\u002f\u002fvP13yKFV63+8\u002fyZjkguLw6z8HY9gQiyXvPw=="},"type":"bar"},{"hovertemplate":"\u003cb\u003e%{x}\u003c\u002fb\u003e\u003cbr\u003eLess Potent: %{y:.4f}\u003cextra\u003e\u003c\u002fextra\u003e","marker":{"color":"#f39c12"},"name":"Less Potent","x":["Terbutaline","Haloperidol","Verapamil_analog","Imatinib_analog","Caffeine_methyl","Luteolin","Arzoxifene_fragment","Honokiol","6-OH-chrysin_deriv","Acetaminophen_CYP2D6","Mannitol","Gluconic_acid","Glycylglycine","Galactose","Lactic_acid","Lysine","Malic_acid"],"y":{"dtype":"f8","bdata":"9MtIFIGL2T\u002fbB9iabfDBP80jPPxEw7A\u002fAjW6PsMO2T85kI9GtabbP7gz1wh+Edc\u002fSUJ3NxWy0z+fcVBoABHVPz1vQXDSB9Y\u002fzruVW8fspD9Fxh7etJtNP9OY+PEWtqY\u002fJ6rhgZCHqT8AAAAAAAAAADadcGXRAmU\u002fpCj1b93gqj\u002fUtv\u002fNa0yKPw=="},"type":"bar"},{"hovertemplate":"\u003cb\u003e%{x}\u003c\u002fb\u003e\u003cbr\u003ePotent: %{y:.4f}\u003cextra\u003e\u003c\u002fextra\u003e","marker":{"color":"#e74c3c"},"name":"Potent","x":["Terbutaline","Haloperidol","Verapamil_analog","Imatinib_analog","Caffeine_methyl","Luteolin","Arzoxifene_fragment","Honokiol","6-OH-chrysin_deriv","Acetaminophen_CYP2D6","Mannitol","Gluconic_acid","Glycylglycine","Galactose","Lactic_acid","Lysine","Malic_acid"],"y":{"dtype":"f8","bdata":"ZmarUd8b4j9TCiWZu3TrPzPYvqM15O0\u002f4pGcAAZ14z+3gYSrcovdP7FiR31Uf+A\u002fpACnW8Em4T9cVSpClankP+NhH2JBV+M\u002fvlb\u002fL1RZkD\u002fsI3zBIOhUP7fyii8Zep8\u002fRKlvzdijpD\u002fMimhfEhMVP0QOOuOyBVc\u002fY6XgMH0Isz8uh+f7z1CMPw=="},"type":"bar"}],                        {"template":{"data":{"barpolar":[{"marker":{"line":{"color":"white","width":0.5},"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"barpolar"}],"bar":[{"error_x":{"color":"#2a3f5f"},"error_y":{"color":"#2a3f5f"},"marker":{"line":{"color":"white","width":0.5},"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"bar"}],"carpet":[{"aaxis":{"endlinecolor":"#2a3f5f","gridcolor":"#C8D4E3","linecolor":"#C8D4E3","minorgridcolor":"#C8D4E3","startlinecolor":"#2a3f5f"},"baxis":{"endlinecolor":"#2a3f5f","gridcolor":"#C8D4E3","linecolor":"#C8D4E3","minorgridcolor":"#C8D4E3","startlinecolor":"#2a3f5f"},"type":"carpet"}],"choropleth":[{"colorbar":{"outlinewidth":0,"ticks":""},"type":"choropleth"}],"contourcarpet":[{"colorbar":{"outlinewidth":0,"ticks":""},"type":"contourcarpet"}],"contour":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"contour"}],"heatmap":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"heatmap"}],"histogram2dcontour":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"histogram2dcontour"}],"histogram2d":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"histogram2d"}],"histogram":[{"marker":{"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"histogram"}],"mesh3d":[{"colorbar":{"outlinewidth":0,"ticks":""},"type":"mesh3d"}],"parcoords":[{"line":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"parcoords"}],"pie":[{"automargin":true,"type":"pie"}],"scatter3d":[{"line":{"colorbar":{"outlinewidth":0,"ticks":""}},"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scatter3d"}],"scattercarpet":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattercarpet"}],"scattergeo":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattergeo"}],"scattergl":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattergl"}],"scattermapbox":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattermapbox"}],"scattermap":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattermap"}],"scatterpolargl":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scatterpolargl"}],"scatterpolar":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scatterpolar"}],"scatter":[{"fillpattern":{"fillmode":"overlay","size":10,"solidity":0.2},"type":"scatter"}],"scatterternary":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scatterternary"}],"surface":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"surface"}],"table":[{"cells":{"fill":{"color":"#EBF0F8"},"line":{"color":"white"}},"header":{"fill":{"color":"#C8D4E3"},"line":{"color":"white"}},"type":"table"}]},"layout":{"annotationdefaults":{"arrowcolor":"#2a3f5f","arrowhead":0,"arrowwidth":1},"autotypenumbers":"strict","coloraxis":{"colorbar":{"outlinewidth":0,"ticks":""}},"colorscale":{"diverging":[[0,"#8e0152"],[0.1,"#c51b7d"],[0.2,"#de77ae"],[0.3,"#f1b6da"],[0.4,"#fde0ef"],[0.5,"#f7f7f7"],[0.6,"#e6f5d0"],[0.7,"#b8e186"],[0.8,"#7fbc41"],[0.9,"#4d9221"],[1,"#276419"]],"sequential":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"sequentialminus":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]},"colorway":["#636efa","#EF553B","#00cc96","#ab63fa","#FFA15A","#19d3f3","#FF6692","#B6E880","#FF97FF","#FECB52"],"font":{"color":"#2a3f5f"},"geo":{"bgcolor":"white","lakecolor":"white","landcolor":"white","showlakes":true,"showland":true,"subunitcolor":"#C8D4E3"},"hoverlabel":{"align":"left"},"hovermode":"closest","mapbox":{"style":"light"},"paper_bgcolor":"white","plot_bgcolor":"white","polar":{"angularaxis":{"gridcolor":"#EBF0F8","linecolor":"#EBF0F8","ticks":""},"bgcolor":"white","radialaxis":{"gridcolor":"#EBF0F8","linecolor":"#EBF0F8","ticks":""}},"scene":{"xaxis":{"backgroundcolor":"white","gridcolor":"#DFE8F3","gridwidth":2,"linecolor":"#EBF0F8","showbackground":true,"ticks":"","zerolinecolor":"#EBF0F8"},"yaxis":{"backgroundcolor":"white","gridcolor":"#DFE8F3","gridwidth":2,"linecolor":"#EBF0F8","showbackground":true,"ticks":"","zerolinecolor":"#EBF0F8"},"zaxis":{"backgroundcolor":"white","gridcolor":"#DFE8F3","gridwidth":2,"linecolor":"#EBF0F8","showbackground":true,"ticks":"","zerolinecolor":"#EBF0F8"}},"shapedefaults":{"line":{"color":"#2a3f5f"}},"ternary":{"aaxis":{"gridcolor":"#DFE8F3","linecolor":"#A2B1C6","ticks":""},"baxis":{"gridcolor":"#DFE8F3","linecolor":"#A2B1C6","ticks":""},"bgcolor":"white","caxis":{"gridcolor":"#DFE8F3","linecolor":"#A2B1C6","ticks":""}},"title":{"x":0.05},"xaxis":{"automargin":true,"gridcolor":"#EBF0F8","linecolor":"#EBF0F8","ticks":"","title":{"standoff":15},"zerolinecolor":"#EBF0F8","zerolinewidth":2},"yaxis":{"automargin":true,"gridcolor":"#EBF0F8","linecolor":"#EBF0F8","ticks":"","title":{"standoff":15},"zerolinecolor":"#EBF0F8","zerolinewidth":2}}},"yaxis":{"title":{"text":"Probability"},"range":[0,1.05]},"margin":{"l":60,"r":30,"t":60,"b":120},"xaxis":{"title":{"text":"Compound"},"tickangle":-45},"barmode":"group","title":{"text":"Predicted Class Probabilities per Compound"},"legend":{"title":{"text":"Class"}},"height":520},                        {"responsive": true}                    )                };            </script>        </div>
+    </div>
+    
+
+    <div class="card">
+      <h2>4 &mdash; Confidence &amp; Uncertainty QC</h2>
+      <p>The scatter plot below maps each compound by its kNN distance to training data
+         (x-axis) and prediction confidence (y-axis). Compounds beyond the AD threshold
+         are considered out-of-domain.</p>
+      <div>                            <div id="14d7ac5b-078b-4394-beeb-40d8bbe81557" class="plotly-graph-div" style="height:500px; width:100%;"></div>            <script type="text/javascript">                window.PLOTLYENV=window.PLOTLYENV || {};                                if (document.getElementById("14d7ac5b-078b-4394-beeb-40d8bbe81557")) {                    Plotly.newPlot(                        "14d7ac5b-078b-4394-beeb-40d8bbe81557",                        [{"hovertemplate":"\u003cb\u003e%{text}\u003c\u002fb\u003e\u003cbr\u003ekNN dist: %{x:.2f}\u003cbr\u003eConfidence: %{y:.3f}\u003cextra\u003e\u003c\u002fextra\u003e","marker":{"color":"#2ecc71","line":{"color":"white","width":1},"size":12},"mode":"markers+text","name":"Correct","text":["Haloperidol","Verapamil_analog","Imatinib_analog","Caffeine_methyl","Arzoxifene_fragment","Honokiol","6-OH-chrysin_deriv","Mannitol","Gluconic_acid","Glycylglycine","Galactose","Lactic_acid","Lysine","Malic_acid"],"textfont":{"size":9},"textposition":"top center","x":{"dtype":"f8","bdata":"W7StzQ4uJED4orHMPzYUQDJwQ6PCTDBAqm\u002fbINRRMEA2ZxKHcu0mQD0Mm1rnfidAXovzTJztJUA\u002feMweGRryP3V3Mm4nLCNAyHYu\u002fWH9I0AAAAAAAAAAAAAAAAAAAPA\u002fsVCi+V2rMkDgOeSs4X4sQA=="},"y":{"dtype":"f8","bdata":"Uwolmbt06z8z2L6jNeTtP+KRnAAGdeM\u002ft4GEq3KL3T+kAKdbwSbhP1xVKkKVqeQ\u002f42EfYkFX4z87umcCJe7vP9weZMfNmO0\u002fxuoKa0kd7T+8BG1nV\u002f\u002fvP13yKFV63+8\u002fyZjkguLw6z8HY9gQiyXvPw=="},"type":"scatter"},{"hovertemplate":"\u003cb\u003e%{text}\u003c\u002fb\u003e\u003cbr\u003ekNN dist: %{x:.2f}\u003cbr\u003eConfidence: %{y:.3f}\u003cextra\u003e\u003c\u002fextra\u003e","marker":{"color":"#e74c3c","line":{"color":"white","width":1},"size":12},"mode":"markers+text","name":"Incorrect","text":["Terbutaline","Luteolin","Acetaminophen_CYP2D6"],"textfont":{"size":9},"textposition":"top center","x":{"dtype":"f8","bdata":"rieSAR15LkDZeqECheE1QApj\u002f1EYGvI\u002f"},"y":{"dtype":"f8","bdata":"ZmarUd8b4j+xYkd9VH\u002fgP46pxuhoLu4\u002f"},"type":"scatter"}],                        {"template":{"data":{"barpolar":[{"marker":{"line":{"color":"white","width":0.5},"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"barpolar"}],"bar":[{"error_x":{"color":"#2a3f5f"},"error_y":{"color":"#2a3f5f"},"marker":{"line":{"color":"white","width":0.5},"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"bar"}],"carpet":[{"aaxis":{"endlinecolor":"#2a3f5f","gridcolor":"#C8D4E3","linecolor":"#C8D4E3","minorgridcolor":"#C8D4E3","startlinecolor":"#2a3f5f"},"baxis":{"endlinecolor":"#2a3f5f","gridcolor":"#C8D4E3","linecolor":"#C8D4E3","minorgridcolor":"#C8D4E3","startlinecolor":"#2a3f5f"},"type":"carpet"}],"choropleth":[{"colorbar":{"outlinewidth":0,"ticks":""},"type":"choropleth"}],"contourcarpet":[{"colorbar":{"outlinewidth":0,"ticks":""},"type":"contourcarpet"}],"contour":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"contour"}],"heatmap":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"heatmap"}],"histogram2dcontour":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"histogram2dcontour"}],"histogram2d":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"histogram2d"}],"histogram":[{"marker":{"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"histogram"}],"mesh3d":[{"colorbar":{"outlinewidth":0,"ticks":""},"type":"mesh3d"}],"parcoords":[{"line":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"parcoords"}],"pie":[{"automargin":true,"type":"pie"}],"scatter3d":[{"line":{"colorbar":{"outlinewidth":0,"ticks":""}},"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scatter3d"}],"scattercarpet":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattercarpet"}],"scattergeo":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattergeo"}],"scattergl":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattergl"}],"scattermapbox":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattermapbox"}],"scattermap":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattermap"}],"scatterpolargl":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scatterpolargl"}],"scatterpolar":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scatterpolar"}],"scatter":[{"fillpattern":{"fillmode":"overlay","size":10,"solidity":0.2},"type":"scatter"}],"scatterternary":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scatterternary"}],"surface":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"surface"}],"table":[{"cells":{"fill":{"color":"#EBF0F8"},"line":{"color":"white"}},"header":{"fill":{"color":"#C8D4E3"},"line":{"color":"white"}},"type":"table"}]},"layout":{"annotationdefaults":{"arrowcolor":"#2a3f5f","arrowhead":0,"arrowwidth":1},"autotypenumbers":"strict","coloraxis":{"colorbar":{"outlinewidth":0,"ticks":""}},"colorscale":{"diverging":[[0,"#8e0152"],[0.1,"#c51b7d"],[0.2,"#de77ae"],[0.3,"#f1b6da"],[0.4,"#fde0ef"],[0.5,"#f7f7f7"],[0.6,"#e6f5d0"],[0.7,"#b8e186"],[0.8,"#7fbc41"],[0.9,"#4d9221"],[1,"#276419"]],"sequential":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"sequentialminus":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]},"colorway":["#636efa","#EF553B","#00cc96","#ab63fa","#FFA15A","#19d3f3","#FF6692","#B6E880","#FF97FF","#FECB52"],"font":{"color":"#2a3f5f"},"geo":{"bgcolor":"white","lakecolor":"white","landcolor":"white","showlakes":true,"showland":true,"subunitcolor":"#C8D4E3"},"hoverlabel":{"align":"left"},"hovermode":"closest","mapbox":{"style":"light"},"paper_bgcolor":"white","plot_bgcolor":"white","polar":{"angularaxis":{"gridcolor":"#EBF0F8","linecolor":"#EBF0F8","ticks":""},"bgcolor":"white","radialaxis":{"gridcolor":"#EBF0F8","linecolor":"#EBF0F8","ticks":""}},"scene":{"xaxis":{"backgroundcolor":"white","gridcolor":"#DFE8F3","gridwidth":2,"linecolor":"#EBF0F8","showbackground":true,"ticks":"","zerolinecolor":"#EBF0F8"},"yaxis":{"backgroundcolor":"white","gridcolor":"#DFE8F3","gridwidth":2,"linecolor":"#EBF0F8","showbackground":true,"ticks":"","zerolinecolor":"#EBF0F8"},"zaxis":{"backgroundcolor":"white","gridcolor":"#DFE8F3","gridwidth":2,"linecolor":"#EBF0F8","showbackground":true,"ticks":"","zerolinecolor":"#EBF0F8"}},"shapedefaults":{"line":{"color":"#2a3f5f"}},"ternary":{"aaxis":{"gridcolor":"#DFE8F3","linecolor":"#A2B1C6","ticks":""},"baxis":{"gridcolor":"#DFE8F3","linecolor":"#A2B1C6","ticks":""},"bgcolor":"white","caxis":{"gridcolor":"#DFE8F3","linecolor":"#A2B1C6","ticks":""}},"title":{"x":0.05},"xaxis":{"automargin":true,"gridcolor":"#EBF0F8","linecolor":"#EBF0F8","ticks":"","title":{"standoff":15},"zerolinecolor":"#EBF0F8","zerolinewidth":2},"yaxis":{"automargin":true,"gridcolor":"#EBF0F8","linecolor":"#EBF0F8","ticks":"","title":{"standoff":15},"zerolinecolor":"#EBF0F8","zerolinewidth":2}}},"shapes":[{"line":{"color":"orange","dash":"dash","width":2},"type":"line","x0":16.30076858159826,"x1":16.30076858159826,"y0":0,"y1":1}],"annotations":[{"font":{"color":"orange","size":11},"showarrow":false,"text":"AD threshold ~ 16.3","x":16.30076858159826,"y":1.02}],"margin":{"l":60,"r":30,"t":60,"b":60},"title":{"text":"Confidence vs. kNN Distance"},"xaxis":{"title":{"text":"kNN Distance (lower = more similar to training data)"}},"yaxis":{"title":{"text":"Max Confidence"}},"height":500},                        {"responsive": true}                    )                };            </script>        </div>
+      <div>                            <div id="b11aa612-ba06-44ac-97ed-3fdbe9d29c62" class="plotly-graph-div" style="height:400px; width:100%;"></div>            <script type="text/javascript">                window.PLOTLYENV=window.PLOTLYENV || {};                                if (document.getElementById("b11aa612-ba06-44ac-97ed-3fdbe9d29c62")) {                    Plotly.newPlot(                        "b11aa612-ba06-44ac-97ed-3fdbe9d29c62",                        [{"boxpoints":"all","hovertemplate":"\u003cb\u003e%{text}\u003c\u002fb\u003e\u003cbr\u003eConfidence: %{y:.3f}\u003cextra\u003e\u003c\u002fextra\u003e","marker":{"color":"#2ecc71"},"name":"Inactive","text":["Acetaminophen_CYP2D6","Mannitol","Gluconic_acid","Glycylglycine","Galactose","Lactic_acid","Lysine","Malic_acid"],"y":{"dtype":"f8","bdata":"jqnG6Ggu7j87umcCJe7vP9weZMfNmO0\u002fxuoKa0kd7T+8BG1nV\u002f\u002fvP13yKFV63+8\u002fyZjkguLw6z8HY9gQiyXvPw=="},"type":"box"},{"boxpoints":"all","hovertemplate":"\u003cb\u003e%{text}\u003c\u002fb\u003e\u003cbr\u003eConfidence: %{y:.3f}\u003cextra\u003e\u003c\u002fextra\u003e","marker":{"color":"#e74c3c"},"name":"Potent","text":["Terbutaline","Haloperidol","Verapamil_analog","Imatinib_analog","Caffeine_methyl","Luteolin","Arzoxifene_fragment","Honokiol","6-OH-chrysin_deriv"],"y":{"dtype":"f8","bdata":"ZmarUd8b4j9TCiWZu3TrPzPYvqM15O0\u002f4pGcAAZ14z+3gYSrcovdP7FiR31Uf+A\u002fpACnW8Em4T9cVSpClankP+NhH2JBV+M\u002f"},"type":"box"}],                        {"template":{"data":{"barpolar":[{"marker":{"line":{"color":"white","width":0.5},"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"barpolar"}],"bar":[{"error_x":{"color":"#2a3f5f"},"error_y":{"color":"#2a3f5f"},"marker":{"line":{"color":"white","width":0.5},"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"bar"}],"carpet":[{"aaxis":{"endlinecolor":"#2a3f5f","gridcolor":"#C8D4E3","linecolor":"#C8D4E3","minorgridcolor":"#C8D4E3","startlinecolor":"#2a3f5f"},"baxis":{"endlinecolor":"#2a3f5f","gridcolor":"#C8D4E3","linecolor":"#C8D4E3","minorgridcolor":"#C8D4E3","startlinecolor":"#2a3f5f"},"type":"carpet"}],"choropleth":[{"colorbar":{"outlinewidth":0,"ticks":""},"type":"choropleth"}],"contourcarpet":[{"colorbar":{"outlinewidth":0,"ticks":""},"type":"contourcarpet"}],"contour":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"contour"}],"heatmap":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"heatmap"}],"histogram2dcontour":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"histogram2dcontour"}],"histogram2d":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"histogram2d"}],"histogram":[{"marker":{"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"histogram"}],"mesh3d":[{"colorbar":{"outlinewidth":0,"ticks":""},"type":"mesh3d"}],"parcoords":[{"line":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"parcoords"}],"pie":[{"automargin":true,"type":"pie"}],"scatter3d":[{"line":{"colorbar":{"outlinewidth":0,"ticks":""}},"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scatter3d"}],"scattercarpet":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattercarpet"}],"scattergeo":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattergeo"}],"scattergl":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattergl"}],"scattermapbox":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattermapbox"}],"scattermap":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattermap"}],"scatterpolargl":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scatterpolargl"}],"scatterpolar":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scatterpolar"}],"scatter":[{"fillpattern":{"fillmode":"overlay","size":10,"solidity":0.2},"type":"scatter"}],"scatterternary":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scatterternary"}],"surface":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"surface"}],"table":[{"cells":{"fill":{"color":"#EBF0F8"},"line":{"color":"white"}},"header":{"fill":{"color":"#C8D4E3"},"line":{"color":"white"}},"type":"table"}]},"layout":{"annotationdefaults":{"arrowcolor":"#2a3f5f","arrowhead":0,"arrowwidth":1},"autotypenumbers":"strict","coloraxis":{"colorbar":{"outlinewidth":0,"ticks":""}},"colorscale":{"diverging":[[0,"#8e0152"],[0.1,"#c51b7d"],[0.2,"#de77ae"],[0.3,"#f1b6da"],[0.4,"#fde0ef"],[0.5,"#f7f7f7"],[0.6,"#e6f5d0"],[0.7,"#b8e186"],[0.8,"#7fbc41"],[0.9,"#4d9221"],[1,"#276419"]],"sequential":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"sequentialminus":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]},"colorway":["#636efa","#EF553B","#00cc96","#ab63fa","#FFA15A","#19d3f3","#FF6692","#B6E880","#FF97FF","#FECB52"],"font":{"color":"#2a3f5f"},"geo":{"bgcolor":"white","lakecolor":"white","landcolor":"white","showlakes":true,"showland":true,"subunitcolor":"#C8D4E3"},"hoverlabel":{"align":"left"},"hovermode":"closest","mapbox":{"style":"light"},"paper_bgcolor":"white","plot_bgcolor":"white","polar":{"angularaxis":{"gridcolor":"#EBF0F8","linecolor":"#EBF0F8","ticks":""},"bgcolor":"white","radialaxis":{"gridcolor":"#EBF0F8","linecolor":"#EBF0F8","ticks":""}},"scene":{"xaxis":{"backgroundcolor":"white","gridcolor":"#DFE8F3","gridwidth":2,"linecolor":"#EBF0F8","showbackground":true,"ticks":"","zerolinecolor":"#EBF0F8"},"yaxis":{"backgroundcolor":"white","gridcolor":"#DFE8F3","gridwidth":2,"linecolor":"#EBF0F8","showbackground":true,"ticks":"","zerolinecolor":"#EBF0F8"},"zaxis":{"backgroundcolor":"white","gridcolor":"#DFE8F3","gridwidth":2,"linecolor":"#EBF0F8","showbackground":true,"ticks":"","zerolinecolor":"#EBF0F8"}},"shapedefaults":{"line":{"color":"#2a3f5f"}},"ternary":{"aaxis":{"gridcolor":"#DFE8F3","linecolor":"#A2B1C6","ticks":""},"baxis":{"gridcolor":"#DFE8F3","linecolor":"#A2B1C6","ticks":""},"bgcolor":"white","caxis":{"gridcolor":"#DFE8F3","linecolor":"#A2B1C6","ticks":""}},"title":{"x":0.05},"xaxis":{"automargin":true,"gridcolor":"#EBF0F8","linecolor":"#EBF0F8","ticks":"","title":{"standoff":15},"zerolinecolor":"#EBF0F8","zerolinewidth":2},"yaxis":{"automargin":true,"gridcolor":"#EBF0F8","linecolor":"#EBF0F8","ticks":"","title":{"standoff":15},"zerolinecolor":"#EBF0F8","zerolinewidth":2}}},"margin":{"l":60,"r":30,"t":60,"b":60},"title":{"text":"Confidence Distribution by Predicted Class"},"yaxis":{"title":{"text":"Max Confidence"}},"height":400},                        {"responsive": true}                    )                };            </script>        </div>
+      <h3>Conformal Prediction Coverage</h3>
+      <ul>
+        <li><strong>Coverage:</strong> 95.1% (target: 95%)</li>
+        <li><strong>Average prediction set size:</strong> 1.55</li>
+        <li><strong>Out-of-domain rate (training):</strong> 18.5%</li>
+      </ul>
+      <p>A conformal coverage near 95% indicates the prediction sets are well-calibrated.
+         Smaller prediction sets mean more decisive predictions.</p>
+    </div>
+    
+
+    <div class="card">
+      <h2>5 &mdash; Per-Target Analysis</h2>
+      <div>                            <div id="3e137219-2639-4c44-874a-aed3239dbf2d" class="plotly-graph-div" style="height:440px; width:100%;"></div>            <script type="text/javascript">                window.PLOTLYENV=window.PLOTLYENV || {};                                if (document.getElementById("3e137219-2639-4c44-874a-aed3239dbf2d")) {                    Plotly.newPlot(                        "3e137219-2639-4c44-874a-aed3239dbf2d",                        [{"marker":{"color":"#2ecc71"},"name":"Pred Inactive","x":["AR","CYP1A2","CYP2D6","CYP3A4","Cav1.2","ERa","GR","Nav1.5","PPARg","RXRa","hERG"],"y":[1,0,1,1,0,1,1,1,1,0,1],"type":"bar"},{"marker":{"color":"#f39c12"},"name":"Pred Less Potent","x":["AR","CYP1A2","CYP2D6","CYP3A4","Cav1.2","ERa","GR","Nav1.5","PPARg","RXRa","hERG"],"y":[0,0,0,0,0,0,0,0,0,0,0],"type":"bar"},{"marker":{"color":"#e74c3c"},"name":"Pred Potent","x":["AR","CYP1A2","CYP2D6","CYP3A4","Cav1.2","ERa","GR","Nav1.5","PPARg","RXRa","hERG"],"y":[0,1,0,1,1,1,0,0,2,1,2],"type":"bar"}],                        {"template":{"data":{"barpolar":[{"marker":{"line":{"color":"white","width":0.5},"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"barpolar"}],"bar":[{"error_x":{"color":"#2a3f5f"},"error_y":{"color":"#2a3f5f"},"marker":{"line":{"color":"white","width":0.5},"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"bar"}],"carpet":[{"aaxis":{"endlinecolor":"#2a3f5f","gridcolor":"#C8D4E3","linecolor":"#C8D4E3","minorgridcolor":"#C8D4E3","startlinecolor":"#2a3f5f"},"baxis":{"endlinecolor":"#2a3f5f","gridcolor":"#C8D4E3","linecolor":"#C8D4E3","minorgridcolor":"#C8D4E3","startlinecolor":"#2a3f5f"},"type":"carpet"}],"choropleth":[{"colorbar":{"outlinewidth":0,"ticks":""},"type":"choropleth"}],"contourcarpet":[{"colorbar":{"outlinewidth":0,"ticks":""},"type":"contourcarpet"}],"contour":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"contour"}],"heatmap":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"heatmap"}],"histogram2dcontour":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"histogram2dcontour"}],"histogram2d":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"histogram2d"}],"histogram":[{"marker":{"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"histogram"}],"mesh3d":[{"colorbar":{"outlinewidth":0,"ticks":""},"type":"mesh3d"}],"parcoords":[{"line":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"parcoords"}],"pie":[{"automargin":true,"type":"pie"}],"scatter3d":[{"line":{"colorbar":{"outlinewidth":0,"ticks":""}},"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scatter3d"}],"scattercarpet":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattercarpet"}],"scattergeo":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattergeo"}],"scattergl":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattergl"}],"scattermapbox":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattermapbox"}],"scattermap":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattermap"}],"scatterpolargl":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scatterpolargl"}],"scatterpolar":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scatterpolar"}],"scatter":[{"fillpattern":{"fillmode":"overlay","size":10,"solidity":0.2},"type":"scatter"}],"scatterternary":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scatterternary"}],"surface":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"surface"}],"table":[{"cells":{"fill":{"color":"#EBF0F8"},"line":{"color":"white"}},"header":{"fill":{"color":"#C8D4E3"},"line":{"color":"white"}},"type":"table"}]},"layout":{"annotationdefaults":{"arrowcolor":"#2a3f5f","arrowhead":0,"arrowwidth":1},"autotypenumbers":"strict","coloraxis":{"colorbar":{"outlinewidth":0,"ticks":""}},"colorscale":{"diverging":[[0,"#8e0152"],[0.1,"#c51b7d"],[0.2,"#de77ae"],[0.3,"#f1b6da"],[0.4,"#fde0ef"],[0.5,"#f7f7f7"],[0.6,"#e6f5d0"],[0.7,"#b8e186"],[0.8,"#7fbc41"],[0.9,"#4d9221"],[1,"#276419"]],"sequential":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"sequentialminus":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]},"colorway":["#636efa","#EF553B","#00cc96","#ab63fa","#FFA15A","#19d3f3","#FF6692","#B6E880","#FF97FF","#FECB52"],"font":{"color":"#2a3f5f"},"geo":{"bgcolor":"white","lakecolor":"white","landcolor":"white","showlakes":true,"showland":true,"subunitcolor":"#C8D4E3"},"hoverlabel":{"align":"left"},"hovermode":"closest","mapbox":{"style":"light"},"paper_bgcolor":"white","plot_bgcolor":"white","polar":{"angularaxis":{"gridcolor":"#EBF0F8","linecolor":"#EBF0F8","ticks":""},"bgcolor":"white","radialaxis":{"gridcolor":"#EBF0F8","linecolor":"#EBF0F8","ticks":""}},"scene":{"xaxis":{"backgroundcolor":"white","gridcolor":"#DFE8F3","gridwidth":2,"linecolor":"#EBF0F8","showbackground":true,"ticks":"","zerolinecolor":"#EBF0F8"},"yaxis":{"backgroundcolor":"white","gridcolor":"#DFE8F3","gridwidth":2,"linecolor":"#EBF0F8","showbackground":true,"ticks":"","zerolinecolor":"#EBF0F8"},"zaxis":{"backgroundcolor":"white","gridcolor":"#DFE8F3","gridwidth":2,"linecolor":"#EBF0F8","showbackground":true,"ticks":"","zerolinecolor":"#EBF0F8"}},"shapedefaults":{"line":{"color":"#2a3f5f"}},"ternary":{"aaxis":{"gridcolor":"#DFE8F3","linecolor":"#A2B1C6","ticks":""},"baxis":{"gridcolor":"#DFE8F3","linecolor":"#A2B1C6","ticks":""},"bgcolor":"white","caxis":{"gridcolor":"#DFE8F3","linecolor":"#A2B1C6","ticks":""}},"title":{"x":0.05},"xaxis":{"automargin":true,"gridcolor":"#EBF0F8","linecolor":"#EBF0F8","ticks":"","title":{"standoff":15},"zerolinecolor":"#EBF0F8","zerolinewidth":2},"yaxis":{"automargin":true,"gridcolor":"#EBF0F8","linecolor":"#EBF0F8","ticks":"","title":{"standoff":15},"zerolinecolor":"#EBF0F8","zerolinewidth":2}}},"margin":{"l":60,"r":30,"t":60,"b":60},"barmode":"group","title":{"text":"Predicted Class Distribution by Target"},"xaxis":{"title":{"text":"Target"}},"yaxis":{"title":{"text":"Number of Compounds"}},"height":440},                        {"responsive": true}                    )                };            </script>        </div>
+      <h3>Known vs. Predicted (where ground truth available)</h3>
+      <div class="table-wrap">
+      <table>
+        <thead><tr><th>Target</th><th>Compound</th><th>Known</th><th>Predicted</th><th>Match</th></tr></thead>
+        <tbody>
+            <tr>
+              <td>AR</td>
+              <td>Lysine</td>
+              <td>Inactive</td>
+              <td>Inactive</td>
+              <td class="correct-icon">&#10003;</td>
+            </tr>
+            <tr>
+              <td>CYP1A2</td>
+              <td>Caffeine_methyl</td>
+              <td>Potent</td>
+              <td>Potent</td>
+              <td class="correct-icon">&#10003;</td>
+            </tr>
+            <tr>
+              <td>CYP2D6</td>
+              <td>Acetaminophen_CYP2D6</td>
+              <td>Less Potent</td>
+              <td>Inactive</td>
+              <td class="wrong-icon">&#10007;</td>
+            </tr>
+            <tr>
+              <td>CYP3A4</td>
+              <td>Imatinib_analog</td>
+              <td>Potent</td>
+              <td>Potent</td>
+              <td class="correct-icon">&#10003;</td>
+            </tr>
+            <tr>
+              <td>CYP3A4</td>
+              <td>Gluconic_acid</td>
+              <td>Inactive</td>
+              <td>Inactive</td>
+              <td class="correct-icon">&#10003;</td>
+            </tr>
+            <tr>
+              <td>Cav1.2</td>
+              <td>Verapamil_analog</td>
+              <td>Potent</td>
+              <td>Potent</td>
+              <td class="correct-icon">&#10003;</td>
+            </tr>
+            <tr>
+              <td>ERa</td>
+              <td>Arzoxifene_fragment</td>
+              <td>Potent</td>
+              <td>Potent</td>
+              <td class="correct-icon">&#10003;</td>
+            </tr>
+            <tr>
+              <td>ERa</td>
+              <td>Malic_acid</td>
+              <td>Inactive</td>
+              <td>Inactive</td>
+              <td class="correct-icon">&#10003;</td>
+            </tr>
+            <tr>
+              <td>GR</td>
+              <td>Lactic_acid</td>
+              <td>Inactive</td>
+              <td>Inactive</td>
+              <td class="correct-icon">&#10003;</td>
+            </tr>
+            <tr>
+              <td>Nav1.5</td>
+              <td>Glycylglycine</td>
+              <td>Inactive</td>
+              <td>Inactive</td>
+              <td class="correct-icon">&#10003;</td>
+            </tr>
+            <tr>
+              <td>PPARg</td>
+              <td>Luteolin</td>
+              <td>Less Potent</td>
+              <td>Potent</td>
+              <td class="wrong-icon">&#10007;</td>
+            </tr>
+            <tr>
+              <td>PPARg</td>
+              <td>Honokiol</td>
+              <td>Potent</td>
+              <td>Potent</td>
+              <td class="correct-icon">&#10003;</td>
+            </tr>
+            <tr>
+              <td>PPARg</td>
+              <td>Galactose</td>
+              <td>Inactive</td>
+              <td>Inactive</td>
+              <td class="correct-icon">&#10003;</td>
+            </tr>
+            <tr>
+              <td>RXRa</td>
+              <td>6-OH-chrysin_deriv</td>
+              <td>Potent</td>
+              <td>Potent</td>
+              <td class="correct-icon">&#10003;</td>
+            </tr>
+            <tr>
+              <td>hERG</td>
+              <td>Terbutaline</td>
+              <td>Less Potent</td>
+              <td>Potent</td>
+              <td class="wrong-icon">&#10007;</td>
+            </tr>
+            <tr>
+              <td>hERG</td>
+              <td>Haloperidol</td>
+              <td>Potent</td>
+              <td>Potent</td>
+              <td class="correct-icon">&#10003;</td>
+            </tr>
+            <tr>
+              <td>hERG</td>
+              <td>Mannitol</td>
+              <td>Inactive</td>
+              <td>Inactive</td>
+              <td class="correct-icon">&#10003;</td>
+            </tr></tbody>
+      </table>
+      </div>
+    </div>
+    
+
+    <div class="card">
+      <h2>6 &mdash; Interpretive Summary</h2>
+
+      <h3>Overall Model Performance</h3>
+      <p>The RandomForest achieved a macro ROC-AUC of
+         <strong>0.8704</strong> and a macro PR-AUC of
+         <strong>0.7969</strong> on the held-out test set
+         (493 compounds). The Matthews Correlation Coefficient
+         (MCC) is 0.4323, indicating moderate
+         multi-class discrimination. The Expected Calibration Error (ECE) of
+         0.3381 suggests the predicted probabilities may be poorly calibrated and should be interpreted with caution.</p>
+
+      <h3>Validation Compound Results</h3>
+      <p>Of the <strong>17</strong> validation compounds with known class labels,
+         <strong>14</strong> (82%) were predicted correctly.</p>
+      <p><strong>Correctly predicted:</strong> Haloperidol, Verapamil_analog, Imatinib_analog, Caffeine_methyl, Arzoxifene_fragment, Honokiol, 6-OH-chrysin_deriv, Mannitol, Gluconic_acid, Glycylglycine, Galactose, Lactic_acid, Lysine, Malic_acid</p>
+      <p><strong>Incorrectly predicted:</strong> Terbutaline, Luteolin, Acetaminophen_CYP2D6</p>
+      <ul><li><strong>Terbutaline</strong>: known Less Potent but predicted Potent (confidence 0.566, in-domain=Yes)</li><li><strong>Luteolin</strong>: known Less Potent but predicted Potent (confidence 0.516, in-domain=No)</li><li><strong>Acetaminophen_CYP2D6</strong>: known Less Potent but predicted Inactive (confidence 0.943, in-domain=Yes)</li></ul>
+
+      <h3>Applicability Domain Coverage</h3>
+      <p><strong>15/17</strong> (88%) of the validation compounds
+         fall within the model's applicability domain. Compounds outside the AD should be
+         interpreted with additional caution, as the model has limited experience with
+         their chemical space.</p>
+
+      <h3>Confidence Levels</h3>
+      <p>The average maximum confidence across all validation predictions is
+         <strong>0.785</strong>.
+         Confidence values are moderate, reflecting inherent uncertainty in the three-class problem.</p>
+
+      <h3>Target Coverage Assessment</h3>
+      <ul>
+        <li><strong>Nuclear Hormone Receptors (7):</strong> AR, ERa, GR, PPARg, PR, PXR, RXRa</li>
+        <li><strong>Ion Channels (3):</strong> Cav1.2, Nav1.5, hERG</li>
+        <li><strong>CYP Enzymes (3):</strong> CYP1A2, CYP2D6, CYP3A4</li>
+      </ul>
+      <p>The model covers 13 safety-pharmacology targets spanning nuclear
+         hormone receptors, cardiac ion channels, and drug-metabolizing CYP enzymes,
+         providing a broad off-target liability profile.</p>
+
+      <h3>Caveats &amp; Limitations</h3>
+      <ul>
+        <li>Predictions are based on molecular fingerprint features only; 3D binding
+            mode information is not captured.</li>
+        <li>The three-class potency binning (inactive / less-potent / potent) is a
+            simplification; borderline compounds near class boundaries may be
+            misclassified.</li>
+        <li>Conformal prediction sets should be consulted alongside point predictions
+            to gauge uncertainty.</li>
+        <li>Compounds outside the applicability domain (in_domain = False) have higher
+            risk of unreliable predictions.</li>
+        <li>The ECE of 0.3381 indicates that raw probability values may
+            not be perfectly calibrated; use prediction sets and confidence rankings
+            rather than absolute probability thresholds for decision-making.</li>
+        <li>This validation set is small (17 compounds) and may not capture all
+            failure modes. Production use requires larger-scale prospective validation.</li>
+      </ul>
+    </div>
+    
+<footer>
+  OFFTOXv3 Validation Report &mdash; Generated by generate_report.py
+</footer>
+</body>
+</html>
