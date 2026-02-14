@@ -299,6 +299,11 @@ def get_models(random_state: int) -> Dict[str, Tuple[Pipeline, Dict[str, List]]]
 
 def run_workflow() -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    # Remove stale files from previous binary-classification runs
+    for stale in ("roc_curve.csv", "pr_curve.csv", "calibration_curve.csv"):
+        stale_path = OUTPUT_DIR / stale
+        if stale_path.exists():
+            stale_path.unlink()
     df = load_and_clean_data(DATA_PATH)
     features, labels, selected_columns = build_feature_matrix(df)
     split = scaffold_split([row["canonical_smiles"] for row in df], labels, random_state=RANDOM_STATE)

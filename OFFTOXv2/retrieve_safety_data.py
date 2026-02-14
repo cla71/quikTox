@@ -193,8 +193,6 @@ def clean_and_preprocess_data(df: pd.DataFrame) -> pd.DataFrame:
         df['activity_class_label'] = df['activity_class'].map(
             {2: 'potent', 1: 'less_potent', 0: 'inactive'}
         )
-        # Keep is_active for backward compatibility
-        df['is_active'] = (df['pchembl_value'] >= 5.0).astype(int)
     
     print(f"Records after cleaning: {len(df)}")
     
@@ -230,7 +228,7 @@ def generate_summary_statistics(df: pd.DataFrame) -> pd.DataFrame:
             lambda x: (x == 0).sum(),  # n_inactive
         ]
     else:
-        agg_dict['is_active'] = 'sum'
+        agg_dict['activity_class'] = 'sum'  # fallback
 
     summary = df.groupby(['safety_category', 'target_common_name', 'activity_type']).agg(
         agg_dict

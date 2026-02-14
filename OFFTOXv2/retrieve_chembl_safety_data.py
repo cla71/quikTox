@@ -509,8 +509,6 @@ def clean_bioactivity_data(df: pd.DataFrame) -> pd.DataFrame:
         df['activity_class_label'] = df['activity_class'].map(
             {2: 'potent', 1: 'less_potent', 0: 'inactive'}
         )
-        # Keep is_active for backward compatibility (potent = active)
-        df['is_active'] = (df['pchembl_value'] >= 5.0).astype(int)
 
     print(f"  Final record count: {len(df)} ({100*len(df)/initial_count:.1f}% retained)")
     
@@ -638,7 +636,6 @@ def main():
                 df_inactive = df_inactive[available].copy()
                 df_inactive['activity_class'] = 0
                 df_inactive['activity_class_label'] = 'inactive'
-                df_inactive['is_active'] = 0
                 df_inactive['safety_category'] = category
                 df_inactive['target_common_name'] = target_name
                 target_frames.append(df_inactive)
