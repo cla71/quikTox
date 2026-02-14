@@ -1,21 +1,24 @@
 {
-  "n_compounds": 2111,
+  "n_compounds": 2350,
   "targets": 6,
-  "actives": 567,
-  "inactives": 1544,
-  "train_size": 1266,
-  "val_size": 422,
-  "test_size": 423,
+  "class_distribution": {
+    "inactive": 239,
+    "less_potent": 658,
+    "potent": 1453
+  },
+  "train_size": 1410,
+  "val_size": 470,
+  "test_size": 470,
   "best_model": "XGBoost",
   "test_metrics": {
     "model": "XGBoost",
-    "roc_auc": 0.8018640063008664,
-    "pr_auc": 0.6724933001711315,
-    "mcc": 0.4514048624314359,
-    "ece": 0.03520174748047754,
-    "mce": 0.10016617799798655
+    "roc_auc_macro": 0.8597785826270702,
+    "pr_auc_macro": 0.7925684318982708,
+    "mcc": 0.43781213652728757,
+    "ece": 0.35277780526861674,
+    "mce": 0.9254041518480322
   },
-  "conformal_coverage": 0.950354609929078,
-  "avg_prediction_set_size": 1.5697399527186762,
-  "out_of_domain_rate": 0.1536643026004728
+  "conformal_coverage": 0.951063829787234,
+  "avg_prediction_set_size": 1.5638297872340425,
+  "out_of_domain_rate": 0.19361702127659575
 }
