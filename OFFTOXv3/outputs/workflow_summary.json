@@ -1,37 +1,48 @@
 {
-  "n_compounds": 2458,
+  "n_compounds": 2665,
   "targets": [
     "AR",
+    "BSEP",
+    "CAR",
     "CYP1A2",
+    "CYP2C19",
+    "CYP2C9",
     "CYP2D6",
     "CYP3A4",
     "Cav1.2",
+    "ER_beta",
     "ERa",
+    "FXR",
     "GR",
+    "LXRa",
+    "LXRb",
+    "MR",
     "Nav1.5",
+    "P-gp",
     "PPARg",
     "PR",
     "PXR",
     "RXRa",
+    "VDR",
     "hERG"
   ],
   "class_distribution": {
-    "inactive": 274,
-    "less_potent": 675,
-    "potent": 1509
+    "inactive": 696,
+    "less_potent": 596,
+    "potent": 1373
   },
-  "train_size": 1474,
-  "val_size": 491,
-  "test_size": 493,
-  "best_model": "RandomForest",
+  "train_size": 1599,
+  "val_size": 533,
+  "test_size": 533,
+  "best_model": "XGBoost",
   "test_metrics": {
-    "roc_auc_macro": 0.8703500961768545,
-    "pr_auc_macro": 0.7969498992374896,
-    "mcc": 0.4323209276155848,
-    "ece": 0.3381113672885216,
-    "mce": 0.9552364847563557
+    "roc_auc_macro": 0.8747638100067809,
+    "pr_auc_macro": 0.7481424752010778,
+    "mcc": 0.5204345985298305,
+    "ece": 0.37920476832980765,
+    "mce": 0.9440344670301974
   },
-  "conformal_coverage": 0.9513184584178499,
-  "avg_prediction_set_size": 1.5456389452332657,
-  "out_of_domain_rate": 0.1845841784989858
+  "conformal_coverage": 0.9418386491557224,
+  "avg_prediction_set_size": 2.0225140712945593,
+  "out_of_domain_rate": 0.275797373358349
 }
