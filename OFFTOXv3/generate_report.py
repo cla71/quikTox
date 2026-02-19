@@ -31,15 +31,13 @@ OUTPUT_HTML = BASE_DIR / "outputs" / "validation_report.html"
 # Helpers
 # ---------------------------------------------------------------------------
 CLASS_COLORS = {
-    "inactive": "#2ecc71",
-    "less_potent": "#f39c12",
-    "potent": "#e74c3c",
+    "non_binding": "#2ecc71",
+    "binding": "#e74c3c",
 }
 
 LABEL_NICE = {
-    "inactive": "Inactive",
-    "less_potent": "Less Potent",
-    "potent": "Potent",
+    "non_binding": "Non-Binding",
+    "binding": "Binding",
 }
 
 
@@ -101,9 +99,8 @@ def build_header(summary):
       </div>
       <p><strong>Targets:</strong> {targets_list}</p>
       <p><strong>Class distribution:</strong>
-         Inactive&nbsp;{cd.get('inactive','?')} &nbsp;|&nbsp;
-         Less-potent&nbsp;{cd.get('less_potent','?')} &nbsp;|&nbsp;
-         Potent&nbsp;{cd.get('potent','?')}</p>
+         Non-Binding&nbsp;{cd.get('non_binding','?')} &nbsp;|&nbsp;
+         Binding&nbsp;{cd.get('binding','?')}</p>
 
       <h3>Test-Set Performance</h3>
       <div class="metrics-grid">
@@ -190,7 +187,7 @@ def build_accuracy_section(preds):
     df = preds.copy()
     df["known_class"] = df["known_class"].astype(str).str.strip()
     df["predicted_label"] = df["predicted_label"].astype(str).str.strip()
-    mask = df["known_class"].isin(["inactive", "less_potent", "potent"])
+    mask = df["known_class"].isin(["non_binding", "binding"])
     df = df[mask].copy()
 
     n_total = len(df)
@@ -199,7 +196,7 @@ def build_accuracy_section(preds):
 
     # Per-class accuracy
     per_class_html = ""
-    classes = ["inactive", "less_potent", "potent"]
+    classes = ["non_binding", "binding"]
     for c in classes:
         sub = df[df["known_class"] == c]
         n_c = len(sub)
@@ -270,9 +267,8 @@ def build_probability_section(preds):
     compound_names = preds["compound_name"].tolist()
 
     fig = go.Figure()
-    for cls, col in [("inactive", "prob_inactive"),
-                     ("less_potent", "prob_less_potent"),
-                     ("potent", "prob_potent")]:
+    for cls, col in [("non_binding", "prob_non_binding"),
+                     ("binding", "prob_binding")]:
         fig.add_trace(go.Bar(
             name=LABEL_NICE[cls],
             x=compound_names,
@@ -298,7 +294,7 @@ def build_probability_section(preds):
     return f"""
     <div class="card">
       <h2>3 &mdash; Probability Distributions</h2>
-      <p>Grouped bar chart showing the three predicted class probabilities for each
+      <p>Grouped bar chart showing the two predicted class probabilities for each
          validation compound. Hover for exact values.</p>
       {_plotly_html(fig, 520)}
     </div>
@@ -312,7 +308,7 @@ def build_confidence_section(preds, summary):
     df["predicted_label"] = df["predicted_label"].astype(str).str.strip()
     df["correct"] = df.apply(
         lambda r: "Correct" if r["known_class"] == r["predicted_label"]
-                  else ("Incorrect" if r["known_class"] in ("inactive", "less_potent", "potent")
+                  else ("Incorrect" if r["known_class"] in ("non_binding", "binding")
                         else "Unknown"),
         axis=1,
     )
@@ -365,7 +361,7 @@ def build_confidence_section(preds, summary):
 
     # Box plot of confidence by predicted label
     fig_box = go.Figure()
-    for cls in ["inactive", "less_potent", "potent"]:
+    for cls in ["non_binding", "binding"]:
         sub = df[df["predicted_label"] == cls]
         if sub.empty:
             continue
@@ -414,7 +410,7 @@ def build_target_section(preds):
     df["predicted_label"] = df["predicted_label"].astype(str).str.strip()
 
     targets = sorted(df["target"].unique())
-    classes = ["inactive", "less_potent", "potent"]
+    classes = ["non_binding", "binding"]
 
     fig = go.Figure()
     for cls in classes:
@@ -443,7 +439,7 @@ def build_target_section(preds):
         for _, r in sub.iterrows():
             known_c = r["known_class"]
             pred_c = r["predicted_label"]
-            if known_c not in ("inactive", "less_potent", "potent"):
+            if known_c not in ("non_binding", "binding"):
                 continue
             match_icon = "correct-icon" if known_c == pred_c else "wrong-icon"
             comp_rows += f"""
@@ -476,7 +472,7 @@ def build_interpretive_summary(preds, summary):
     df["known_class"] = df["known_class"].astype(str).str.strip()
     df["predicted_label"] = df["predicted_label"].astype(str).str.strip()
 
-    has_known = df["known_class"].isin(["inactive", "less_potent", "potent"])
+    has_known = df["known_class"].isin(["non_binding", "binding"])
     df_known = df[has_known]
     n_total = len(df_known)
     n_correct = (df_known["known_class"] == df_known["predicted_label"]).sum()
@@ -523,7 +519,7 @@ def build_interpretive_summary(preds, summary):
          <strong>{tm.get('pr_auc_macro',0):.4f}</strong> on the held-out test set
          ({summary.get('test_size','?')} compounds). The Matthews Correlation Coefficient
          (MCC) is {tm.get('mcc',0):.4f}, indicating {'moderate' if tm.get('mcc',0) < 0.5 else 'good'}
-         multi-class discrimination. The Expected Calibration Error (ECE) of
+         binary discrimination. The Expected Calibration Error (ECE) of
          {tm.get('ece',0):.4f} suggests {'the predicted probabilities may be poorly calibrated and should be interpreted with caution' if tm.get('ece',0) > 0.15 else 'reasonable probability calibration'}.</p>
 
       <h3>Validation Compound Results</h3>
@@ -542,7 +538,7 @@ def build_interpretive_summary(preds, summary):
       <h3>Confidence Levels</h3>
       <p>The average maximum confidence across all validation predictions is
          <strong>{avg_conf:.3f}</strong>.
-         {'Confidence values are moderate, reflecting inherent uncertainty in the three-class problem.' if avg_conf < 0.8 else 'Confidence values are generally high, suggesting the model is decisive for these compounds.'}</p>
+         {'Confidence values are moderate, reflecting some uncertainty in the predictions.' if avg_conf < 0.8 else 'Confidence values are generally high, suggesting the model is decisive for these compounds.'}</p>
 
       <h3>Target Coverage Assessment</h3>
       <ul>
@@ -558,9 +554,9 @@ def build_interpretive_summary(preds, summary):
       <ul>
         <li>Predictions are based on molecular fingerprint features only; 3D binding
             mode information is not captured.</li>
-        <li>The three-class potency binning (inactive / less-potent / potent) is a
-            simplification; borderline compounds near class boundaries may be
-            misclassified.</li>
+        <li>The binary classification (non-binding / binding at 10 &micro;M threshold)
+            uses a standard pharmacological cutoff; borderline compounds near
+            pChEMBL 5.0 may be misclassified.</li>
         <li>Conformal prediction sets should be consulted alongside point predictions
             to gauge uncertainty.</li>
         <li>Compounds outside the applicability domain (in_domain = False) have higher

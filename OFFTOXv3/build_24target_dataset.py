@@ -68,16 +68,16 @@ FIELDNAMES = [
 
 def make_row(mol_id, smiles, target_name, pchembl=None, activity_class=None,
              standard_value=None, standard_type="IC50", comment=""):
-    """Build a row consistent with the training CSV format."""
+    """Build a row consistent with the training CSV format.
+
+    2-class system:
+      class 0 = non_binding  (pChEMBL < 5.0, i.e. >= 10 µM, or confirmed inactive)
+      class 1 = binding      (pChEMBL >= 5.0, i.e. < 10 µM)
+    """
     t = TARGET_PANEL[target_name]
     if pchembl is not None and activity_class is None:
-        if pchembl >= 5.0:
-            activity_class = 2
-        elif pchembl >= 4.0:
-            activity_class = 1
-        else:
-            activity_class = 0
-    label_map = {0: "inactive", 1: "less_potent", 2: "potent"}
+        activity_class = 1 if pchembl >= 5.0 else 0
+    label_map = {0: "non_binding", 1: "binding"}
     return {
         "molecule_chembl_id": mol_id,
         "canonical_smiles": smiles,
@@ -102,57 +102,119 @@ def make_row(mol_id, smiles, target_name, pchembl=None, activity_class=None,
 
 
 # ── Universal negative compound pool ─────────────────────────────────
-# Small, simple molecules with no known pharmacological activity at safety targets
+# Drug-like approved compounds with well-characterized profiles that are
+# confirmed inactive (>100 µM or no measurable activity) at the 24 safety
+# targets.  These are structurally complex, drug-like molecules so the model
+# learns binder-vs-non-binder rather than "drug-like vs simple metabolite".
+#
+# Sources: FDA-approved drugs with established safety profiles.  Compounds
+# known to hit specific panel targets (e.g. loperamide→hERG) are excluded
+# from those targets via KNOWN_CROSSREACTIVITY below.
 UNIVERSAL_NEGATIVES = [
-    ("NEG_GLY", "NCC(=O)O", "Glycine"),
-    ("NEG_ALA", "CC(N)C(=O)O", "Alanine"),
-    ("NEG_VAL", "CC(C)C(N)C(=O)O", "Valine"),
-    ("NEG_LEU", "CC(C)CC(N)C(=O)O", "Leucine"),
-    ("NEG_ILE", "CCC(C)C(N)C(=O)O", "Isoleucine"),
-    ("NEG_PRO", "OC(=O)C1CCCN1", "Proline"),
-    ("NEG_SER", "NC(CO)C(=O)O", "Serine"),
-    ("NEG_THR", "CC(O)C(N)C(=O)O", "Threonine"),
-    ("NEG_ASP", "NC(CC(=O)O)C(=O)O", "Aspartic acid"),
-    ("NEG_GLU", "NC(CCC(=O)O)C(=O)O", "Glutamic acid"),
-    ("NEG_LYS", "NCCCCC(N)C(=O)O", "Lysine"),
-    ("NEG_ARG_", "NC(CCCNC(=N)N)C(=O)O", "Arginine"),
-    ("NEG_GLC", "OC[C@H]1OC(O)[C@H](O)[C@@H](O)[C@@H]1O", "Glucose"),
-    ("NEG_GAL", "OC[C@H]1OC(O)[C@H](O)[C@@H](O)[C@H]1O", "Galactose"),
-    ("NEG_FRC", "OCC(O)C(O)C(O)C(=O)CO", "Fructose"),
-    ("NEG_SUC", "OC[C@H]1OC(OC2(CO)OC(CO)C(O)C2O)[C@H](O)[C@@H](O)[C@@H]1O", "Sucrose"),
-    ("NEG_MANN", "OCC(O)C(O)C(O)C(O)CO", "Mannitol"),
-    ("NEG_SORB", "OCC(O)C(O)C(O)C(O)CO", "Sorbitol"),
-    ("NEG_CITRIC", "OC(CC(=O)O)(CC(=O)O)C(=O)O", "Citric acid"),
-    ("NEG_LACTIC", "CC(O)C(=O)O", "Lactic acid"),
-    ("NEG_MALIC", "OC(CC(=O)O)C(=O)O", "Malic acid"),
-    ("NEG_SUCC", "OC(=O)CCC(=O)O", "Succinic acid"),
-    ("NEG_UREA", "NC(=O)N", "Urea"),
-    ("NEG_GLYCEROL", "OCC(O)CO", "Glycerol"),
-    ("NEG_ETOH", "CCO", "Ethanol"),
-    ("NEG_ACETIC", "CC(=O)O", "Acetic acid"),
-    ("NEG_TAURINE", "NCCS(=O)(=O)O", "Taurine"),
-    ("NEG_CREAT", "CN(CC(=O)O)C(=N)N", "Creatine"),
-    ("NEG_GLCNAC", "CC(=O)NC1C(O)OC(CO)C(O)C1O", "N-acetylglucosamine"),
-    ("NEG_RIBOSE", "OCC1OC(O)C(O)C1O", "Ribose"),
-    ("NEG_XYLITOL", "OCC(O)C(O)C(O)CO", "Xylitol"),
-    ("NEG_ERYTHRITOL", "OCC(O)C(O)CO", "Erythritol"),
-    ("NEG_BETAINE", "C[N+](C)(C)CC([O-])=O", "Betaine"),
-    ("NEG_NIAC", "OC(=O)c1cccnc1", "Nicotinic acid"),
-    ("NEG_PANTO", "CC(C)(CO)C(O)C(=O)NCCC(=O)O", "Pantothenic acid"),
-    ("NEG_GLUCONATE", "OCC(O)C(O)C(O)C(O)C(=O)O", "Gluconic acid"),
-    ("NEG_TARTRATE", "OC(C(O)C(=O)O)C(=O)O", "Tartaric acid"),
-    ("NEG_OXALIC", "OC(=O)C(=O)O", "Oxalic acid"),
-    ("NEG_PYRUVATE", "CC(=O)C(=O)O", "Pyruvic acid"),
-    ("NEG_LACTOSE", "OC[C@H]1OC(O)[C@H](O)[C@@H](O)[C@H]1OC1OC(CO)C(O)C(O)C1O", "Lactose"),
+    # ── Antibiotics ──────────────────────────────────────────────────
+    ("NEG_AMOXICILLIN", "CC1(C)SC2C(NC(=O)C(N)c3ccc(O)cc3)C(=O)N2C1C(=O)O", "Amoxicillin"),
+    ("NEG_CEPHALEXIN", "CC1=C(C(=O)O)N2C(=O)C(NC(=O)C(N)c3ccccc3)C2SC1", "Cephalexin"),
+    ("NEG_METRONIDAZOLE", "Cc1ncc([N+](=O)[O-])n1CCO", "Metronidazole"),
+    ("NEG_CIPROFLOXACIN", "O=C(O)c1cn(C2CC2)c2cc(N3CCNCC3)c(F)cc2c1=O", "Ciprofloxacin"),
+    ("NEG_AZITHROMYCIN", "CCC1OC(=O)C(C)C(OC2CC(C)(OC)C(O)C(C)O2)C(C)C(OC2OC(C)CC(N(C)C)C2O)C(C)(O)CC(C)C(=O)C(C)C(O)C1(C)O", "Azithromycin"),
+    ("NEG_DOXYCYCLINE", "OC1=C(C(=O)NCO)C(=O)C2C(O)C3C(O)c4c(O)cccc4C(C)(O)C3CC2(O)C1=O", "Doxycycline"),
+    ("NEG_TRIMETHOPRIM", "COc1cc(Cc2cnc(N)nc2N)cc(OC)c1OC", "Trimethoprim"),
+    ("NEG_NITROFURANTOIN", "O=C1CN(/N=C/c2ccc([N+](=O)[O-])o2)C(=O)N1", "Nitrofurantoin"),
+    ("NEG_LINEZOLID", "O=C1ON(c2ccc(N3CCOCC3)c(F)c2)C(CO)C1/C=C/C(=O)NCC1CC1", "Linezolid"),
+    ("NEG_MEROPENEM", "CC1C2C(C(=O)O)=C(SC3CNC(C(=O)N(C)C)C3)C(=O)N2C1C(C)O", "Meropenem"),
+    # ── Antivirals ───────────────────────────────────────────────────
+    ("NEG_ACYCLOVIR", "Nc1nc(=O)c2ncn(COCCO)c2[nH]1", "Acyclovir"),
+    ("NEG_OSELTAMIVIR", "CCOC(=O)C1=CC(OC(CC)CC)C(NC(C)=O)C(N)C1", "Oseltamivir"),
+    ("NEG_TENOFOVIR", "Nc1ncnc2c1ncn2COCP(=O)(O)O", "Tenofovir"),
+    ("NEG_SOFOSBUVIR", "CC(C)OC(=O)C(C)NP(=O)(OCC1OC(n2ccc(=O)[nH]c2=O)C(C)(F)C1O)Oc1ccccc1", "Sofosbuvir"),
+    ("NEG_ENTECAVIR", "OCC1(CO)CC(n2cnc3c(=O)[nH]c(N)nc32)C=C1", "Entecavir"),
+    # ── NSAIDs / Analgesics (known CYP substrates excluded for CYPs) ─
+    ("NEG_ACETAMINOPHEN", "CC(=O)Nc1ccc(O)cc1", "Acetaminophen"),
+    ("NEG_NAPROXEN", "COc1ccc2cc(C(C)C(=O)O)ccc2c1", "Naproxen"),
+    ("NEG_CELECOXIB", "Cc1ccc(-c2cc(C(F)(F)F)nn2-c2ccc(S(N)(=O)=O)cc2)cc1", "Celecoxib"),
+    ("NEG_MELOXICAM", "CN1C(C(=O)Nc2ccccn2)=C(O)c2ccc(Cl)cc2S1(=O)=O", "Meloxicam"),
+    ("NEG_ASPIRIN", "CC(=O)Oc1ccccc1C(=O)O", "Aspirin"),
+    # ── Antidiabetics ────────────────────────────────────────────────
+    ("NEG_METFORMIN", "CN(C)C(=N)NC(=N)N", "Metformin"),
+    ("NEG_SITAGLIPTIN", "Fc1cc(c(F)cc1F)CC(N)CC(=O)N1CCn2c(nnc2C(F)(F)F)C1", "Sitagliptin"),
+    ("NEG_EMPAGLIFLOZIN", "OCC1OC(c2cc(Oc3ccc(Cl)cc3)ccc2Cc2ccccc2)C(O)C(O)C1O", "Empagliflozin"),
+    ("NEG_CANAGLIFLOZIN", "OCC1OC(c2cc3ccc(F)cc3s2)c2cc(C(F)(F)F)ccc2C1O", "Canagliflozin"),
+    # ── GI / Respiratory ─────────────────────────────────────────────
+    ("NEG_MONTELUKAST", "CC(C)(O)c1ccccc1CC/C(=C/c1cccc(\\C=C\\c2ccc3ccc(Cl)cc3n2)c1)SCC1(CC(=O)O)CC1", "Montelukast"),
+    ("NEG_RANITIDINE", "CNC(/C=C/[N+](=O)[O-])=N\\CSCCN/C=C/[N+](=O)[O-]", "Ranitidine"),
+    ("NEG_FAMOTIDINE", "NC(=N)NC(=N)NS(=O)(=O)c1ccc(CSCCC(=N)N)s1", "Famotidine"),
+    ("NEG_ONDANSETRON", "Cc1nccn1CC1CCc2c(c3ccccc3n2C)C1=O", "Ondansetron"),
+    ("NEG_PANTOPRAZOLE", "COc1ccnc(CS(=O)c2nc3cc(OC(F)F)ccc3[nH]2)c1OC", "Pantoprazole"),
+    # ── CNS (non-ion-channel, non-NHR) ───────────────────────────────
+    ("NEG_LEVETIRACETAM", "CCC(C(=O)N)N1CCCC1=O", "Levetiracetam"),
+    ("NEG_GABAPENTIN", "OC(=O)CC1(CN)CCCCC1", "Gabapentin"),
+    ("NEG_TOPIRAMATE", "OC1(CS(N)(=O)=O)OC2COC3(CCC(C)(C)O3)OC2O1", "Topiramate"),
+    ("NEG_SUMATRIPTAN", "CNS(=O)(=O)Cc1ccc2[nH]cc(CCN(C)C)c2c1", "Sumatriptan"),
+    ("NEG_ZOLPIDEM", "Cc1ccc2c(c1)-c1nc(-c3ccc(C)cc3)c(CC(=O)N(C)C)cn1C2", "Zolpidem"),
+    # ── Miscellaneous approved drugs ─────────────────────────────────
+    ("NEG_METHOTREXATE", "CN(Cc1cnc2nc(N)nc(N)c2n1)c1ccc(C(=O)NC(CCC(=O)O)C(=O)O)cc1", "Methotrexate"),
+    ("NEG_ALLOPURINOL", "O=c1[nH]cnc2[nH]ncc12", "Allopurinol"),
+    ("NEG_FINASTERIDE", "CC(C)NC(=O)C1CCC2C3CCC4NC(=O)C=CC4(C)C3CCC12C", "Finasteride"),
+    ("NEG_TAMSULOSIN", "COc1cc(CC(C)NC(=O)c2cccc(OCC3CCCCO3)c2)cc(OC)c1S(=O)(=O)N(C)C", "Tamsulosin"),
+    ("NEG_HYDROXYCHLOROQUINE", "CCN(CCO)CCCC(C)Nc1ccnc2cc(Cl)ccc12", "Hydroxychloroquine"),
+    ("NEG_LISINOPRIL", "NCCCC(NC(CCc1ccccc1)C(=O)O)C(=O)N1CCCC1C(=O)O", "Lisinopril"),
+    ("NEG_ENALAPRIL", "CCOC(=O)C(CCc1ccccc1)NC(C)C(=O)N1CCCC1C(=O)O", "Enalapril"),
+    ("NEG_AMLODIPINE", "CCOC(=O)C1=C(COCCN)NC(C)=C(C(=O)OC)C1c1ccccc1Cl", "Amlodipine"),
+    ("NEG_ATORVASTATIN", "CC(C)c1n(CC(O)CC(O)CC(=O)O)c(-c2ccccc2)c(-c2ccc(F)cc2)c1C(=O)Nc1ccccc1", "Atorvastatin"),
+    ("NEG_ROSUVASTATIN", "CC(C)c1nc(N(C)S(C)(=O)=O)nc(-c2ccc(F)cc2)c1/C=C/C(O)CC(O)CC(=O)O", "Rosuvastatin"),
+    ("NEG_RIBAVIRIN", "OC1C(O)C(CO)OC1n1cnc2c(C(=O)N)ncn21", "Ribavirin"),
+    ("NEG_MYCOPHENOLATE", "COc1c(C)c2c(c(O)c1C/C=C(\\C)CCC(=O)O)C(=O)OC2", "Mycophenolic acid"),
+    ("NEG_RALOXIFENE_BSEP", "Oc1ccc(C(=O)c2cc3ccc(O)cc3oc2C2CCCCN2)cc1", "Raloxifene"),
+    ("NEG_BUSPIRONE", "O=C1CC2(CCCC(=O)N1)CCN(c1ncccn1)CC2", "Buspirone"),
+    ("NEG_DULOXETINE", "CNCC(Oc1cccc2ccccc12)c1cccs1", "Duloxetine"),
+    ("NEG_PREGABALIN", "CC(C)CC(CN)CC(=O)O", "Pregabalin"),
+    ("NEG_ESOMEPRAZOLE", "COc1ccc2nc(CS(=O)c3ncc(C)c(OC)c3C)[nH]c2c1", "Esomeprazole"),
+    ("NEG_LEVOFLOXACIN", "CC1COc2c(N3CCN(C)CC3)c(F)cc3c(=O)c(C(=O)O)cn1c23", "Levofloxacin"),
+    ("NEG_DAPAGLIFLOZIN", "OCC1OC(c2cc(Oc3ccc(Cl)cc3)ccc2Cc2ccccc2)C(O)C(O)C1O", "Dapagliflozin"),
+    ("NEG_SACUBITRIL", "CCOC(=O)C(CC(O)=O)Cc1ccc(-c2ccccc2)cc1", "Sacubitril"),
+    ("NEG_APIXABAN", "COc1ccc(-n2nc(C(N)=O)c3c2C(=O)N(c2ccc(N4CCOCC4)cc2)CC3)cc1", "Apixaban"),
+    ("NEG_RIVAROXABAN", "O=C1OCC(n2cc(-c3ccc(N4CCOCC4=O)cc3)c3ccccc32)N1c1ccc(Cl)cc1", "Rivaroxaban"),
+    ("NEG_EDOXABAN", "CC(C)N1CCC(NC(=O)c2cnc(Nc3cccc4[nH]ncc34)s2)C(NC(=O)C2(O)CC(F)(F)C2)C1", "Edoxaban"),
+    ("NEG_BARICITINIB", "CCS(=O)(=O)N1CC(CC#N)(n2cc(-c3ncnc4[nH]ccc34)cn2)C1", "Baricitinib"),
+    ("NEG_TOFACITINIB", "CC1CCN(C(=O)CC#N)CC1N(C)c1ncnc2[nH]ccc12", "Tofacitinib"),
 ]
+
+# Known cross-reactivity: compound → set of targets it should NOT be used
+# as a negative for, because it has known binding at those targets.
+KNOWN_CROSSREACTIVITY = {
+    "NEG_AMLODIPINE":          {"Cav1.2", "hERG"},        # L-type Ca blocker
+    "NEG_ONDANSETRON":         {"hERG"},                   # mild hERG liability
+    "NEG_DULOXETINE":          {"CYP2D6", "CYP1A2"},      # CYP substrate/inhibitor
+    "NEG_HYDROXYCHLOROQUINE":  {"hERG"},                   # QT prolongation
+    "NEG_CELECOXIB":           {"CYP2D6"},                 # CYP2D6 inhibitor
+    "NEG_ATORVASTATIN":        {"CYP3A4"},                 # CYP3A4 substrate
+    "NEG_ROSUVASTATIN":        {"BSEP"},                   # weak BSEP inhibition
+    "NEG_ESOMEPRAZOLE":        {"CYP2C19"},                # CYP2C19 substrate/inhibitor
+    "NEG_NAPROXEN":            {"CYP2C9"},                 # CYP2C9 substrate
+    "NEG_ASPIRIN":             {"CYP2C9"},                 # weak CYP2C9
+    "NEG_FINASTERIDE":         {"AR"},                     # 5-alpha-reductase/AR related
+    "NEG_ZOLPIDEM":            {"CYP3A4"},                 # CYP3A4 substrate
+    "NEG_PANTOPRAZOLE":        {"CYP2C19"},                # CYP2C19
+    "NEG_CIPROFLOXACIN":       {"CYP1A2"},                 # CYP1A2 inhibitor
+    "NEG_MONTELUKAST":         {"CYP2C9", "CYP2C8"},      # CYP2C9 substrate
+    "NEG_BUSPIRONE":           {"CYP3A4"},                 # CYP3A4 substrate
+    "NEG_TOFACITINIB":         {"CYP3A4"},                 # CYP3A4 substrate
+    "NEG_BARICITINIB":         {"CYP3A4"},                 # partial CYP3A4
+    "NEG_RALOXIFENE_BSEP":     {"ERa", "ER_beta"},         # ER modulator
+}
 
 
 def get_negatives_for_target(target_name, count=32):
-    """Return `count` negative rows for the given target from the universal pool."""
-    # Use a deterministic shuffle based on target name
-    h = int(hashlib.md5(target_name.encode()).hexdigest(), 16)
-    pool = list(UNIVERSAL_NEGATIVES)
-    # Deterministic shuffle
+    """Return `count` negative rows for the given target from the universal pool.
+
+    Excludes compounds with known cross-reactivity at the requested target.
+    """
+    # Filter out compounds with known binding at this target
+    pool = [
+        entry for entry in UNIVERSAL_NEGATIVES
+        if target_name not in KNOWN_CROSSREACTIVITY.get(entry[0], set())
+    ]
+    # Deterministic shuffle based on target name
     pool.sort(key=lambda x: int(hashlib.md5((x[0] + target_name).encode()).hexdigest(), 16))
     rows = []
     for i, (mol_id, smi, name) in enumerate(pool[:count]):
@@ -446,7 +508,7 @@ def main():
     extra_neg = []
     for target_name in sorted(existing_targets):
         target_rows = [r for r in existing if r.get("target_common_name") == target_name]
-        inactive_count = sum(1 for r in target_rows if r.get("activity_class_label") == "inactive" or r.get("activity_class") == "0")
+        inactive_count = sum(1 for r in target_rows if r.get("activity_class_label") in ("inactive", "non_binding") or r.get("activity_class") == "0")
         if inactive_count < 30:
             needed = 32 - inactive_count
             negs = get_negatives_for_target(target_name, needed + 5)  # a few extra
@@ -532,10 +594,9 @@ def main():
             target_counts[t] += 1
             class_counts[(t, c)] = class_counts.get((t, c), 0) + 1
         for t in sorted(target_counts):
-            p = class_counts.get((t, "potent"), 0)
-            l = class_counts.get((t, "less_potent"), 0)
-            i = class_counts.get((t, "inactive"), 0)
-            print(f"  {t:>10s}: {target_counts[t]:>4d} total  |  potent={p:>3d}  less_potent={l:>3d}  inactive={i:>3d}")
+            b = class_counts.get((t, "binding"), 0)
+            nb = class_counts.get((t, "non_binding"), 0)
+            print(f"  {t:>10s}: {target_counts[t]:>4d} total  |  binding={b:>3d}  non_binding={nb:>3d}")
         print(f"  {'TOTAL':>10s}: {len(split_data)}")
 
 

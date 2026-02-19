@@ -90,9 +90,9 @@ TARGET_PANEL = {
 }
 
 RANDOM_STATE = 42
-ACTIVITY_CLASS_MAP = {0: "inactive", 1: "less_potent", 2: "potent"}
-CLASS_COLORS = {0: "#2ecc71", 1: "#f39c12", 2: "#e74c3c"}
-NUM_CLASSES = 3
+ACTIVITY_CLASS_MAP = {0: "non_binding", 1: "binding"}
+CLASS_COLORS = {0: "#2ecc71", 1: "#e74c3c"}
+NUM_CLASSES = 2
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -109,6 +109,11 @@ class SplitData:
 # Data loading
 # ══════════════════════════════════════════════════════════════════════
 def load_and_clean_data(path: Path) -> List[dict]:
+    """Load training CSV and assign 2-class labels.
+
+    Class 0 (non_binding): confirmed inactive, or pChEMBL < 5.0 (>= 10 µM)
+    Class 1 (binding):     pChEMBL >= 5.0 (< 10 µM)
+    """
     rows = []
     with path.open(newline="", encoding="utf-8") as fh:
         reader = csv.DictReader(fh)
@@ -117,7 +122,9 @@ def load_and_clean_data(path: Path) -> List[dict]:
             if not smi:
                 continue
             raw_class = row.get("activity_class", "")
-            if raw_class == "0" or row.get("activity_class_label") == "inactive":
+            raw_label = row.get("activity_class_label", "")
+            # Confirmed inactive or non_binding → class 0
+            if raw_class == "0" or raw_label in ("inactive", "non_binding"):
                 row["pchembl_value"] = None
                 row["activity_class"] = 0
                 rows.append(row)
@@ -133,7 +140,8 @@ def load_and_clean_data(path: Path) -> List[dict]:
             if pchembl < 4.0:
                 continue
             row["pchembl_value"] = pchembl
-            row["activity_class"] = 2 if pchembl >= 5.0 else 1
+            # 2-class: binding (>= 5.0) vs non_binding (< 5.0)
+            row["activity_class"] = 1 if pchembl >= 5.0 else 0
             rows.append(row)
 
     deduped: dict = {}
@@ -276,8 +284,8 @@ def get_models(random_state):
         ),
         "XGBoost": (
             Pipeline([("scaler", StandardScaler(with_mean=False)),
-                       ("model", XGBClassifier(random_state=random_state, objective="multi:softprob",
-                                               num_class=NUM_CLASSES, eval_metric="mlogloss",
+                       ("model", XGBClassifier(random_state=random_state, objective="binary:logistic",
+                                               eval_metric="logloss",
                                                n_jobs=-1, verbosity=0))]),
             {"model__n_estimators": [200, 500], "model__max_depth": [3, 5, 7],
              "model__learning_rate": [0.01, 0.05, 0.1], "model__subsample": [0.6, 0.8, 1.0],
@@ -286,7 +294,7 @@ def get_models(random_state):
         "LightGBM": (
             Pipeline([("scaler", StandardScaler(with_mean=False)),
                        ("model", LGBMClassifier(random_state=random_state, n_jobs=-1, verbose=-1,
-                                                objective="multiclass", num_class=NUM_CLASSES))]),
+                                                objective="binary"))]),
             {"model__n_estimators": [200, 500], "model__max_depth": [-1, 5, 10],
              "model__learning_rate": [0.01, 0.05, 0.1], "model__num_leaves": [31, 63, 127],
              "model__subsample": [0.6, 0.8, 1.0]},
@@ -328,18 +336,17 @@ def main():
     target_class_df = pd.DataFrame({"target": targets_all, "class": labels_all})
     target_order = sorted(set(targets_all))
     class_by_target = target_class_df.groupby(["target", "class"]).size().unstack(fill_value=0)
-    class_by_target = class_by_target.reindex(columns=[0, 1, 2], fill_value=0)
+    class_by_target = class_by_target.reindex(columns=list(range(NUM_CLASSES)), fill_value=0)
     class_by_target.columns = [ACTIVITY_CLASS_MAP[c] for c in class_by_target.columns]
     class_by_target.loc[target_order].plot.barh(
         stacked=True, ax=axes[1],
-        color=[CLASS_COLORS[0], CLASS_COLORS[1], CLASS_COLORS[2]], edgecolor="black")
+        color=[CLASS_COLORS[c] for c in range(NUM_CLASSES)], edgecolor="black")
     axes[1].set_title("Compounds per Target"); axes[1].set_xlabel("Count")
     axes[1].legend(title="Class", loc="lower right")
 
     pchembl_vals = [float(row["pchembl_value"]) for row in data if row["pchembl_value"] is not None]
     axes[2].hist(pchembl_vals, bins=30, color="#3498db", edgecolor="black", alpha=0.8)
-    axes[2].axvline(5.0, color="red", ls="--", lw=2, label="Potent (5.0)")
-    axes[2].axvline(4.0, color="orange", ls="--", lw=2, label="Less-potent (4.0)")
+    axes[2].axvline(5.0, color="red", ls="--", lw=2, label="Binding threshold (5.0)")
     axes[2].set_title("pChEMBL Value Distribution"); axes[2].set_xlabel("pChEMBL")
     axes[2].set_ylabel("Count"); axes[2].legend()
     fig.tight_layout()
@@ -375,7 +382,7 @@ def main():
         print(f"  Training {name}...", end=" ", flush=True)
         search = RandomizedSearchCV(
             pipeline, param_distributions=param_grid, n_iter=5,
-            scoring="roc_auc_ovr", cv=3, random_state=RANDOM_STATE, n_jobs=1)
+            scoring="roc_auc", cv=3, random_state=RANDOM_STATE, n_jobs=1)
         t0 = time.time()
         search.fit(X_train, y_train)
         train_times[name] = time.time() - t0
@@ -389,10 +396,8 @@ def main():
             est.fit(X_tr, y_tr)
             probs = est.predict_proba(X_te)
             preds = est.predict(X_te)
-            scores.append(roc_auc_score(y_te, probs, multi_class="ovr", average="macro"))
-            pr_per = [average_precision_score((y_te == c).astype(int), probs[:, c])
-                      for c in range(NUM_CLASSES) if (y_te == c).sum() > 0]
-            pr_scores.append(float(np.mean(pr_per)) if pr_per else 0.0)
+            scores.append(roc_auc_score(y_te, probs[:, 1]))
+            pr_scores.append(average_precision_score(y_te, probs[:, 1]))
             mcc_scores.append(matthews_corrcoef(y_te, preds))
 
         cv_summary.append({
@@ -420,10 +425,8 @@ def main():
 
     test_probs = best_model.predict_proba(X_test)
     test_preds = best_model.predict(X_test)
-    test_roc = roc_auc_score(y_test, test_probs, multi_class="ovr", average="macro")
-    pr_per = [average_precision_score((y_test == c).astype(int), test_probs[:, c])
-              for c in range(NUM_CLASSES) if (y_test == c).sum() > 0]
-    test_pr = float(np.mean(pr_per)) if pr_per else 0.0
+    test_roc = roc_auc_score(y_test, test_probs[:, 1])
+    test_pr = average_precision_score(y_test, test_probs[:, 1])
     test_mcc = matthews_corrcoef(y_test, test_preds)
 
     calibrated = CalibratedClassifierCV(best_model, method="isotonic", cv=3)
@@ -438,38 +441,40 @@ def main():
     # ── 7. Visualization plots ────────────────────────────────────────
     print("\n[7/12] Generating evaluation plots...")
 
-    # ROC curves
-    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+    # ROC curves (binary: one curve for binding class)
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
     for cls in range(NUM_CLASSES):
         label = ACTIVITY_CLASS_MAP[cls]
-        binary_true = (y_test == cls).astype(int)
-        if binary_true.sum() == 0:
-            axes[cls].set_title(f"ROC - {label} (no samples)"); continue
-        fpr, tpr, _ = roc_curve(binary_true, test_probs[:, cls])
-        auc_val = roc_auc_score(binary_true, test_probs[:, cls])
-        axes[cls].plot(fpr, tpr, color=CLASS_COLORS[cls], lw=2, label=f"AUC = {auc_val:.3f}")
+        fpr, tpr, _ = roc_curve(y_test, test_probs[:, 1], pos_label=1)
+        auc_val = roc_auc_score(y_test, test_probs[:, 1])
+        if cls == 0:
+            axes[cls].plot(1-fpr, 1-tpr, color=CLASS_COLORS[cls], lw=2, label=f"AUC = {auc_val:.3f}")
+        else:
+            axes[cls].plot(fpr, tpr, color=CLASS_COLORS[cls], lw=2, label=f"AUC = {auc_val:.3f}")
         axes[cls].plot([0, 1], [0, 1], "k--", lw=1, alpha=0.5)
         axes[cls].set_xlabel("FPR"); axes[cls].set_ylabel("TPR")
         axes[cls].set_title(f"ROC - {label}"); axes[cls].legend(loc="lower right")
-    fig.suptitle(f"Per-Class ROC ({best_model_name})", fontsize=14, y=1.02)
+    fig.suptitle(f"ROC Curves ({best_model_name})", fontsize=14, y=1.02)
     fig.tight_layout(); fig.savefig(OUTPUT_DIR / "02_roc_curves.png", dpi=150, bbox_inches="tight")
     plt.close(fig)
 
-    # PR curves
-    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
-    for cls in range(NUM_CLASSES):
-        label = ACTIVITY_CLASS_MAP[cls]
-        binary_true = (y_test == cls).astype(int)
-        if binary_true.sum() == 0:
-            axes[cls].set_title(f"PR - {label} (no samples)"); continue
-        prec, rec, _ = precision_recall_curve(binary_true, test_probs[:, cls])
-        ap = average_precision_score(binary_true, test_probs[:, cls])
-        axes[cls].plot(rec, prec, color=CLASS_COLORS[cls], lw=2, label=f"AP = {ap:.3f}")
-        baseline = binary_true.mean()
-        axes[cls].axhline(baseline, color="gray", ls="--", lw=1, alpha=0.5, label=f"Baseline = {baseline:.3f}")
-        axes[cls].set_xlabel("Recall"); axes[cls].set_ylabel("Precision")
-        axes[cls].set_title(f"PR - {label}"); axes[cls].legend(loc="upper right")
-    fig.suptitle(f"Per-Class PR ({best_model_name})", fontsize=14, y=1.02)
+    # PR curves (binary)
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+    prec_b, rec_b, _ = precision_recall_curve(y_test, test_probs[:, 1])
+    ap_b = average_precision_score(y_test, test_probs[:, 1])
+    axes[1].plot(rec_b, prec_b, color=CLASS_COLORS[1], lw=2, label=f"AP = {ap_b:.3f}")
+    axes[1].axhline(y_test.mean(), color="gray", ls="--", lw=1, alpha=0.5,
+                     label=f"Baseline = {y_test.mean():.3f}")
+    axes[1].set_xlabel("Recall"); axes[1].set_ylabel("Precision")
+    axes[1].set_title("PR - binding"); axes[1].legend(loc="upper right")
+    prec_nb, rec_nb, _ = precision_recall_curve(1-y_test, test_probs[:, 0])
+    ap_nb = average_precision_score(1-y_test, test_probs[:, 0])
+    axes[0].plot(rec_nb, prec_nb, color=CLASS_COLORS[0], lw=2, label=f"AP = {ap_nb:.3f}")
+    axes[0].axhline(1-y_test.mean(), color="gray", ls="--", lw=1, alpha=0.5,
+                     label=f"Baseline = {1-y_test.mean():.3f}")
+    axes[0].set_xlabel("Recall"); axes[0].set_ylabel("Precision")
+    axes[0].set_title("PR - non_binding"); axes[0].legend(loc="upper right")
+    fig.suptitle(f"PR Curves ({best_model_name})", fontsize=14, y=1.02)
     fig.tight_layout(); fig.savefig(OUTPUT_DIR / "03_pr_curves.png", dpi=150, bbox_inches="tight")
     plt.close(fig)
 
@@ -489,8 +494,8 @@ def main():
     fig.tight_layout(); fig.savefig(OUTPUT_DIR / "04_confusion_matrix.png", dpi=150, bbox_inches="tight")
     plt.close(fig)
 
-    # Calibration
-    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+    # Calibration (binary)
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
     for cls in range(NUM_CLASSES):
         label = ACTIVITY_CLASS_MAP[cls]
         binary_true = (y_test == cls).astype(int)
@@ -628,7 +633,7 @@ def main():
 
     summary = {
         "n_compounds": len(data), "targets": sorted(set(targets_all)),
-        "class_distribution": {ACTIVITY_CLASS_MAP[c]: int((labels==c).sum()) for c in range(NUM_CLASSES)},
+        "class_distribution": {ACTIVITY_CLASS_MAP[c]: int((labels_all==c).sum()) for c in range(NUM_CLASSES)},
         "train_size": len(X_train), "val_size": len(X_val), "test_size": len(X_test),
         "best_model": best_model_name,
         "test_metrics": {"roc_auc_macro": test_roc, "pr_auc_macro": test_pr,
@@ -653,10 +658,21 @@ def main():
         test_rows_for_features = []
         for _, row in test_df.iterrows():
             kc = row.get("known_class", -1)
+            if pd.notna(kc) and str(kc).strip() != "":
+                kc_int = int(kc)
+                # Map old 3-class labels to 2-class: 0→0, 1→0 (non_binding), 2→1 (binding)
+                if kc_int == 2:
+                    kc_mapped = 1
+                elif kc_int in (0, 1):
+                    kc_mapped = 0
+                else:
+                    kc_mapped = -1
+            else:
+                kc_mapped = -1
             test_rows_for_features.append({
                 "canonical_smiles": row["smiles"],
                 "target_common_name": row["target"],
-                "activity_class": int(kc) if pd.notna(kc) and str(kc).strip() != "" else -1,
+                "activity_class": kc_mapped,
             })
         X_test_ext, y_test_ext, _ = build_feature_matrix(test_rows_for_features,
                                                           selected_columns=selected_columns)
@@ -674,8 +690,7 @@ def main():
             test_ext_classes = sorted(set(y_test_ext_valid))
             if len(test_ext_classes) >= 2:
                 try:
-                    ext_roc = roc_auc_score(y_test_ext_valid, ext_probs,
-                                            multi_class="ovr", average="macro")
+                    ext_roc = roc_auc_score(y_test_ext_valid, ext_probs[:, 1])
                 except ValueError:
                     ext_roc = float("nan")
             ext_mcc = matthews_corrcoef(y_test_ext_valid, ext_preds)
@@ -764,14 +779,14 @@ def main():
         lines.append(f"| {cls} | {ACTIVITY_CLASS_MAP[cls]} | {n} | {100*n/len(data):.1f}% |")
 
     lines.append("\n### Per-Target Compound Counts\n")
-    lines.append("| Target | Category | Total | Potent | Less Potent | Inactive |")
-    lines.append("|--------|----------|------:|-------:|------------:|---------:|")
+    lines.append("| Target | Category | Total | Binding | Non-Binding |")
+    lines.append("|--------|----------|------:|--------:|------------:|")
     tdf = pd.DataFrame({"target": targets_all, "class": labels_all})
     for t in sorted(set(targets_all)):
         cat = TARGET_PANEL.get(t, {}).get("category", "?")
         td = tdf[tdf["target"] == t]
-        lines.append(f"| {t} | {cat} | {len(td)} | {int((td['class']==2).sum())} | "
-                     f"{int((td['class']==1).sum())} | {int((td['class']==0).sum())} |")
+        lines.append(f"| {t} | {cat} | {len(td)} | {int((td['class']==1).sum())} | "
+                     f"{int((td['class']==0).sum())} |")
 
     lines.append("\n## 2. Cross-Validation Results\n")
     lines.append("| Model | ROC-AUC | PR-AUC | MCC |")
@@ -785,18 +800,18 @@ def main():
     lines.append("## 3. Internal Test Set Performance (Scaffold Split)\n")
     lines.append("| Metric | Value |")
     lines.append("|--------|------:|")
-    lines.append(f"| ROC-AUC (macro) | {test_roc:.4f} |")
-    lines.append(f"| PR-AUC (macro) | {test_pr:.4f} |")
+    lines.append(f"| ROC-AUC | {test_roc:.4f} |")
+    lines.append(f"| PR-AUC | {test_pr:.4f} |")
     lines.append(f"| MCC | {test_mcc:.4f} |")
     lines.append(f"| ECE (calibrated) | {ece:.4f} |")
     lines.append(f"| MCE (calibrated) | {mce:.4f} |")
 
     lines.append("\n### Confusion Matrix\n")
     cm_r = confusion_matrix(y_test, test_preds, labels=list(range(NUM_CLASSES)))
-    lines.append("| | Pred: inactive | Pred: less_potent | Pred: potent |")
-    lines.append("|---|---:|---:|---:|")
-    for i, lab in enumerate(["inactive", "less_potent", "potent"]):
-        lines.append(f"| **{lab}** | {cm_r[i,0]} | {cm_r[i,1]} | {cm_r[i,2]} |")
+    lines.append("| | Pred: non_binding | Pred: binding |")
+    lines.append("|---|---:|---:|")
+    for i, lab in enumerate(["non_binding", "binding"]):
+        lines.append(f"| **{lab}** | {cm_r[i,0]} | {cm_r[i,1]} |")
 
     lines.append("\n## 4. Uncertainty Quantification\n")
     lines.append(f"- **Conformal coverage:** {coverage:.4f} (target: 0.95)")
@@ -807,7 +822,7 @@ def main():
     lines.append("## 5. Held-Out Test Set Evaluation\n")
     if not np.isnan(ext_roc):
         lines.append(f"- **Test compounds:** {len(y_test_ext_valid)}")
-        lines.append(f"- **ROC-AUC (macro):** {ext_roc:.4f}")
+        lines.append(f"- **ROC-AUC:** {ext_roc:.4f}")
         lines.append(f"- **MCC:** {ext_mcc:.4f}")
         lines.append(f"- **Accuracy:** {ext_acc:.4f}\n")
         if test_target_metrics:
