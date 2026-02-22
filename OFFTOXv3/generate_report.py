@@ -9,6 +9,7 @@ HTML report at outputs/validation_report.html.
 
 import json
 import os
+import pickle
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -25,6 +26,7 @@ BASE_DIR = Path(__file__).resolve().parent
 PREDICTIONS_CSV = BASE_DIR / "outputs" / "predictions.csv"
 SUMMARY_JSON = BASE_DIR / "outputs" / "workflow_summary.json"
 VALIDATION_CSV = BASE_DIR / "data" / "validation_compounds.csv"
+MODEL_PKL = BASE_DIR / "model" / "safety_model.pkl"
 OUTPUT_HTML = BASE_DIR / "outputs" / "validation_report.html"
 
 # ---------------------------------------------------------------------------
@@ -62,7 +64,15 @@ def load_data():
     with open(SUMMARY_JSON) as fh:
         summary = json.load(fh)
     val = pd.read_csv(VALIDATION_CSV)
-    return preds, summary, val
+
+    artifacts = {}
+    if MODEL_PKL.exists():
+        with open(MODEL_PKL, "rb") as fh:
+            artifacts = pickle.load(fh)
+    else:
+        print(f"  WARNING: model pkl not found at {MODEL_PKL} — SAS section will be empty")
+
+    return preds, summary, val, artifacts
 
 
 # ---------------------------------------------------------------------------
@@ -572,6 +582,143 @@ def build_interpretive_summary(preds, summary):
 
 
 # ---------------------------------------------------------------------------
+# Section 7 -- SAS (Structural Activity Score) Analysis
+# ---------------------------------------------------------------------------
+
+def build_sas_section(artifacts: dict) -> str:
+    """Section 7 -- per-target MCS active-core SMARTS table + bar chart + pan-active detection."""
+    sas_cores = artifacts.get("sas_cores", {})
+    if not sas_cores:
+        return """
+    <div class="card">
+      <h2>7 &mdash; SAS Core Analysis</h2>
+      <p>No SAS core data available. Re-run the notebook with the updated workflow to generate
+         MCS cores (model pkl must contain the <code>sas_cores</code> key).</p>
+    </div>
+    """
+
+    # ── Per-target core table ─────────────────────────────────────────
+    try:
+        from rdkit import Chem
+        from rdkit.Chem import rdFMCS
+        rdkit_available = True
+    except ImportError:
+        rdkit_available = False
+
+    def _core_atom_count(smarts):
+        if not smarts or not rdkit_available:
+            return None
+        try:
+            mol = Chem.MolFromSmarts(smarts)
+            return mol.GetNumAtoms() if mol else None
+        except Exception:
+            return None
+
+    table_rows = []
+    core_sizes = {}  # target -> atom count (for bar chart)
+
+    for target in sorted(sas_cores.keys()):
+        smarts = sas_cores[target]
+        if smarts:
+            n_atoms = _core_atom_count(smarts)
+            core_sizes[target] = n_atoms if n_atoms is not None else 0
+            smarts_short = smarts if len(smarts) <= 60 else smarts[:57] + "..."
+            table_rows.append(f"""
+            <tr>
+              <td>{target}</td>
+              <td class="smiles" title="{smarts}">{smarts_short}</td>
+              <td style="text-align:center">{n_atoms if n_atoms is not None else "&mdash;"}</td>
+            </tr>""")
+        else:
+            core_sizes[target] = 0
+            table_rows.append(f"""
+            <tr>
+              <td>{target}</td>
+              <td style="color:#999"><em>No core (too few actives or MCS degenerate)</em></td>
+              <td style="text-align:center">&mdash;</td>
+            </tr>""")
+
+    table_html = f"""
+    <h3>Per-Target Active Core (MCS SMARTS)</h3>
+    <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Target</th><th>Core SMARTS</th><th>Core Atoms</th></tr>
+      </thead>
+      <tbody>
+        {''.join(table_rows)}
+      </tbody>
+    </table>
+    </div>
+    """
+
+    # ── Bar chart of core sizes ────────────────────────────────────────
+    targets_sorted = sorted(core_sizes, key=lambda t: core_sizes[t], reverse=True)
+    sizes_sorted = [core_sizes[t] for t in targets_sorted]
+    bar_colors = ["#3498db" if s > 0 else "#bdc3c7" for s in sizes_sorted]
+
+    fig_bar = go.Figure(go.Bar(
+        x=targets_sorted,
+        y=sizes_sorted,
+        marker_color=bar_colors,
+        hovertemplate="<b>%{x}</b><br>Core atoms: %{y}<extra></extra>",
+    ))
+    fig_bar.update_layout(
+        title="Active Core Size per Target (MCS atom count)",
+        xaxis_title="Target",
+        yaxis_title="Core Atoms",
+        template="plotly_white",
+        margin=dict(l=60, r=30, t=60, b=80),
+        xaxis_tickangle=-45,
+    )
+
+    # ── Cross-target pan-active core detection ─────────────────────────
+    # Targets with cores >= median non-zero size share structural requirements
+    non_zero_sizes = [s for s in core_sizes.values() if s > 0]
+    pan_active_html = ""
+    if non_zero_sizes:
+        import statistics
+        median_size = statistics.median(non_zero_sizes)
+        large_core_targets = sorted(
+            [t for t, s in core_sizes.items() if s >= median_size and s > 0]
+        )
+        small_core_targets = sorted(
+            [t for t, s in core_sizes.items() if 0 < s < median_size]
+        )
+        no_core_targets = sorted([t for t, s in core_sizes.items() if s == 0])
+
+        pan_active_html = f"""
+        <h3>Cross-Target Pan-Active Core Detection</h3>
+        <p>Targets with large MCS cores (≥ median {median_size:.0f} atoms) have highly
+           conserved active pharmacophores — compounds matching these cores have elevated
+           pan-active risk:</p>
+        <ul>
+          <li><strong>Large-core targets ({len(large_core_targets)}):</strong>
+              {', '.join(large_core_targets) if large_core_targets else 'None'}</li>
+          <li><strong>Small-core targets ({len(small_core_targets)}):</strong>
+              {', '.join(small_core_targets) if small_core_targets else 'None'}</li>
+          <li><strong>No core available ({len(no_core_targets)}):</strong>
+              {', '.join(no_core_targets) if no_core_targets else 'None'}</li>
+        </ul>
+        <p>A compound with a high <code>sas_score</code> for a large-core target is
+           structurally similar to known actives and warrants priority experimental follow-up.</p>
+        """
+
+    return f"""
+    <div class="card">
+      <h2>7 &mdash; SAS Core Analysis</h2>
+      <p>Maximum Common Substructure (MCS) cores derived from training active compounds
+         (binding class) per target. The core SMARTS encodes the minimal shared
+         pharmacophore. The <code>sas_score</code> in novel-compound predictions is the
+         Tanimoto similarity of a compound's Morgan fingerprint to the core fingerprint.</p>
+      {table_html}
+      {_plotly_html(fig_bar, 450)}
+      {pan_active_html}
+    </div>
+    """
+
+
+# ---------------------------------------------------------------------------
 # Assemble full HTML
 # ---------------------------------------------------------------------------
 
@@ -709,10 +856,13 @@ def assemble_html(sections):
 
 def main():
     print("Loading data ...")
-    preds, summary, val = load_data()
+    preds, summary, val, artifacts = load_data()
     print(f"  Predictions: {len(preds)} rows")
     print(f"  Summary model: {summary.get('best_model')}")
     print(f"  Validation compounds: {len(val)} rows")
+    sas_cores = artifacts.get("sas_cores", {})
+    valid_cores = sum(v is not None for v in sas_cores.values()) if sas_cores else 0
+    print(f"  SAS cores loaded: {valid_cores}/{len(sas_cores)} targets")
 
     print("Building report sections ...")
     sections = [
@@ -723,6 +873,7 @@ def main():
         build_confidence_section(preds, summary),
         build_target_section(preds),
         build_interpretive_summary(preds, summary),
+        build_sas_section(artifacts),
     ]
 
     html = assemble_html(sections)
