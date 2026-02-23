@@ -1,5 +1,6 @@
 #This is a TODO list for my Claude Code Companion (CCC or Isopropyl or Iso for short).
 #This will keep a record of daily coding sessions with Iso and user. Iso or Claude will refer to this TODO file for daily updates.
+#Within OFFTOXv3 directory is the "run_pipeline.py" script that is used by Iso to run the code. The code in the workflow .ipynb file needs to be the main focus for changes.
 Sample entry:
 [DATE]
 - Each individual bullet will be its' own task.
