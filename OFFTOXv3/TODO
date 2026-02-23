@@ -1,0 +1,25 @@
+#This is a TODO list for my Claude Code Companion (CCC or Isopropyl or Iso for short).
+#This will keep a record of daily coding sessions with Iso and user. Iso or Claude will refer to this TODO file for daily updates.
+Sample entry:
+[DATE]
+- Each individual bullet will be its' own task.
+  - sub bullets define particular subtasks or detailed information related to the above task.
+#Each session will be added chronologically (newest to oldest) so that the only the first entry from [DATE] to older [DATE] will be used for the TODO list.
+#However it would be beneficial to include a summary of the previous days TODO list for context as well.
+#After reviewing the TODO file, generate a plan to provide for approval in the prompt window, make sure to highlight actions based on TODO list tasks.
+[22-February-2026]
+- The model selection portion of the script needs to be more holistic in the selection:
+  - Model selection discrepancy. The RF was selected on ROC-AUC, but the MCDA composite ranking placed LightGBM first (0.948 vs 0.646). LightGBM's MCC (0.565 vs 0.393) is substantially better — critical given the 84:16 class imbalance. The RF's internal test MCC of 0.287 with 608 false positives vs 107 true negatives confirms poor minority-class discrimination.
+  - Make sure that the final output includes the best holistic model prediction as well as a consensus accross the top three unique ML type models. This change needs to occur in the hold out set analysis and the novel compound analysis cells.
+- The novel compound prediction section needs to handle out of domain compounds better.
+  - What if a majority of compounds fall outside the applicability domain (kNN distance > 100), how should these predictions be handled.
+  - Also make sure to standardize the "smiles" column in the novel compounds csv using RDKIT.
+  - Rather than force a target value and column in the novel compound spreadsheet, all smiles will be run against all targets.
+- Many of the NHRs have severe class imbalance (most have >75% binders), make sure to include some form of SMOTE analysis or correction to handle this in the final best model.
+  - In general there is a lack of nonbinder data, make sure the models account for the severse class imbalance overall as well.
+- Using the Held-out Test Set, per target performance varies dramatically, provide a correction to account for this in the model building. Any target that has a MCC = 1 likely has issues and should not be used as a target.
+- Calibration failure: The ECE of 0.202 and MCE of 0.954 indicate that predicted probabilities do not reliably correspond to true binding rates. A predicted 70% binding probability does not mean 70% chance of binding — the model is overconfident in some probability bins and underconfident in others. This means probability thresholds should be interpreted with extreme caution, and conformal prediction sets should be preferred for decision-making.
+  - What happens if a novel compound prediction using the trained model produces ambiguous conformal predictions?
+- Include a predicted activity (greater or less than 10 micromolar).
+- Make sure the types of models tested are RF, LightGBM, xgBoost, and GNN.
+
