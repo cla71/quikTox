@@ -10,3 +10,4 @@ scipy>=1.10
 joblib>=1.2
 ipykernel>=6.0
 jupyter>=1.0
+imbalanced-learn>=0.11
