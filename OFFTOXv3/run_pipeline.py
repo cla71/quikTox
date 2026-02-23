@@ -31,7 +31,10 @@ from rdkit import Chem
 from rdkit.Chem import Crippen, Descriptors, Lipinski, MolSurf, rdFingerprintGenerator
 from rdkit.Chem.Scaffolds import MurckoScaffold
 
+from rdkit.Chem.MolStandardize import rdMolStandardize
+
 from sklearn.calibration import CalibratedClassifierCV, calibration_curve
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     average_precision_score,
     confusion_matrix,
@@ -44,10 +47,17 @@ from sklearn.metrics import (
 from sklearn.model_selection import RandomizedSearchCV, RepeatedStratifiedKFold
 from sklearn.neighbors import NearestNeighbors
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, normalize
 from sklearn.ensemble import RandomForestClassifier
 from xgboost import XGBClassifier
 from lightgbm import LGBMClassifier
+
+# ── Optional: SMOTE for class imbalance ──────────────────────────────
+try:
+    from imblearn.over_sampling import SMOTE
+    HAS_SMOTE = True
+except ImportError:
+    HAS_SMOTE = False
 
 warnings.filterwarnings("ignore")
 sns.set_theme(style="whitegrid", font_scale=1.1)
@@ -93,6 +103,28 @@ RANDOM_STATE = 42
 ACTIVITY_CLASS_MAP = {0: "non_binding", 1: "binding"}
 CLASS_COLORS = {0: "#2ecc71", 1: "#e74c3c"}
 NUM_CLASSES = 2
+ACTIVITY_THRESHOLD_UM = 10.0        # pChEMBL >= 5.0 <=> IC50/Ki <= 10 µM
+ACTIVITY_THRESHOLD_PCHEMBL = 5.0
+SEVERE_OOD_THRESHOLD = 100.0       # k-NN distance beyond which predictions are highly uncertain
+
+# ── SMILES standardizer ───────────────────────────────────────────────
+_standardizer = rdMolStandardize.Standardizer()
+_largest_fragment = rdMolStandardize.LargestFragmentChooser()
+_uncharger = rdMolStandardize.Uncharger()
+
+def standardize_smiles(smi):
+    if not smi:
+        return None
+    mol = Chem.MolFromSmiles(smi)
+    if mol is None:
+        return None
+    try:
+        mol = _standardizer.standardize(mol)
+        mol = _largest_fragment.choose(mol)
+        mol = _uncharger.uncharge(mol)
+        return Chem.MolToSmiles(mol)
+    except Exception:
+        return Chem.MolToSmiles(mol)
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -273,31 +305,102 @@ def ece_score_fn(y_true, y_prob, n_bins=10):
     return ece, mce
 
 
-def get_models(random_state):
+class WLGraphClassifier:
+    """Weisfeiler-Lehman graph kernel + Logistic Regression (GNN proxy)."""
+
+    def __init__(self, n_iterations=4, n_hash_buckets=4096, C=1.0,
+                 class_weight="balanced", random_state=42):
+        self.n_iterations = n_iterations
+        self.n_hash_buckets = n_hash_buckets
+        self.C = C
+        self.class_weight = class_weight
+        self.random_state = random_state
+        self._clf = None
+
+    def _mol_to_wl_vector(self, smi):
+        mol = Chem.MolFromSmiles(smi) if smi else None
+        if mol is None:
+            return np.zeros(self.n_hash_buckets * (self.n_iterations + 1))
+        n_atoms = mol.GetNumAtoms()
+        node_labels = {}
+        for atom in mol.GetAtoms():
+            idx = atom.GetIdx()
+            node_labels[idx] = hash((
+                atom.GetAtomicNum(), atom.GetTotalNumHs(), atom.GetDegree(),
+                int(atom.GetIsAromatic()), int(atom.IsInRing()), int(atom.GetFormalCharge()),
+            )) % self.n_hash_buckets
+        adj = {i: [] for i in range(n_atoms)}
+        for bond in mol.GetBonds():
+            u, v = bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()
+            adj[u].append(v); adj[v].append(u)
+        feat = np.zeros(self.n_hash_buckets * (self.n_iterations + 1))
+        for lbl in node_labels.values():
+            feat[lbl] += 1
+        for iteration in range(1, self.n_iterations + 1):
+            new_labels = {}
+            for idx in range(n_atoms):
+                nb_labels = tuple(sorted(node_labels[nb] for nb in adj[idx]))
+                new_labels[idx] = hash((node_labels[idx],) + nb_labels) % self.n_hash_buckets
+            node_labels = new_labels
+            offset = iteration * self.n_hash_buckets
+            for lbl in node_labels.values():
+                feat[offset + lbl] += 1
+        return feat
+
+    def _transform(self, smiles_list):
+        X = np.array([self._mol_to_wl_vector(s) for s in smiles_list])
+        return normalize(X, norm="l2")
+
+    def fit(self, smiles_list, y):
+        X = self._transform(smiles_list)
+        self._clf = LogisticRegression(
+            C=self.C, class_weight=self.class_weight,
+            max_iter=1000, random_state=self.random_state, solver="saga")
+        self._clf.fit(X, y)
+        return self
+
+    def predict(self, smiles_list):
+        return self._clf.predict(self._transform(smiles_list))
+
+    def predict_proba(self, smiles_list):
+        return self._clf.predict_proba(self._transform(smiles_list))
+
+
+def get_models(random_state, y_train_ref=None):
+    pos_weight_est = 1.0
+    if y_train_ref is not None:
+        n_neg = int((y_train_ref == 0).sum())
+        n_pos = int((y_train_ref == 1).sum())
+        pos_weight_est = n_neg / max(n_pos, 1)
+
     return {
         "RandomForest": (
             Pipeline([("scaler", StandardScaler(with_mean=False)),
                        ("model", RandomForestClassifier(random_state=random_state, n_jobs=-1))]),
             {"model__n_estimators": [200, 500], "model__max_depth": [10, 20, None],
              "model__min_samples_split": [2, 5, 10], "model__max_features": ["sqrt", "log2", 0.3],
-             "model__class_weight": ["balanced", None]},
+             "model__class_weight": ["balanced", {0: 1, 1: int(pos_weight_est)}, None]},
         ),
         "XGBoost": (
             Pipeline([("scaler", StandardScaler(with_mean=False)),
-                       ("model", XGBClassifier(random_state=random_state, objective="binary:logistic",
-                                               eval_metric="logloss",
-                                               n_jobs=-1, verbosity=0))]),
+                       ("model", XGBClassifier(
+                           random_state=random_state, objective="binary:logistic",
+                           eval_metric="logloss", n_jobs=-1, verbosity=0,
+                           scale_pos_weight=pos_weight_est))]),
             {"model__n_estimators": [200, 500], "model__max_depth": [3, 5, 7],
              "model__learning_rate": [0.01, 0.05, 0.1], "model__subsample": [0.6, 0.8, 1.0],
-             "model__colsample_bytree": [0.6, 0.8, 1.0]},
+             "model__colsample_bytree": [0.6, 0.8, 1.0],
+             "model__scale_pos_weight": [1.0, pos_weight_est]},
         ),
         "LightGBM": (
             Pipeline([("scaler", StandardScaler(with_mean=False)),
-                       ("model", LGBMClassifier(random_state=random_state, n_jobs=-1, verbose=-1,
-                                                objective="binary"))]),
+                       ("model", LGBMClassifier(
+                           random_state=random_state, n_jobs=-1, verbose=-1,
+                           objective="binary", is_unbalance=True))]),
             {"model__n_estimators": [200, 500], "model__max_depth": [-1, 5, 10],
              "model__learning_rate": [0.01, 0.05, 0.1], "model__num_leaves": [31, 63, 127],
-             "model__subsample": [0.6, 0.8, 1.0]},
+             "model__subsample": [0.6, 0.8, 1.0], "model__is_unbalance": [True],
+             "model__min_child_samples": [10, 20, 50]},
         ),
     }
 
@@ -366,11 +469,24 @@ def main():
     X_train, y_train = features[split.train_idx], labels[split.train_idx]
     X_val, y_val = features[split.val_idx], labels[split.val_idx]
     X_test, y_test = features[split.test_idx], labels[split.test_idx]
+    smiles_all   = [row["canonical_smiles"] for row in data]
+    smiles_train = [smiles_all[i] for i in split.train_idx]
+    smiles_val   = [smiles_all[i] for i in split.val_idx]
+    smiles_test  = [smiles_all[i] for i in split.test_idx]
     print(f"  Train: {len(X_train)} | Val: {len(X_val)} | Test: {len(X_test)}")
+    # Per-target imbalance check
+    for target in sorted(set(targets_all)):
+        t_idx = [i for i in split.train_idx if targets_all[i] == target]
+        if not t_idx:
+            continue
+        t_labels = labels[t_idx]
+        pct_bind = 100 * int((t_labels == 1).sum()) / len(t_labels)
+        if pct_bind > 75 or pct_bind < 25:
+            print(f"  IMBALANCE {target}: {pct_bind:.0f}% binders")
 
     # ── 5. Train models ──────────────────────────────────────────────
-    print("\n[5/12] Training models...")
-    models = get_models(RANDOM_STATE)
+    print("\n[5/12] Training models (RF, XGBoost, LightGBM, GNN)...")
+    models = get_models(RANDOM_STATE, y_train_ref=y_train)
     cv = RepeatedStratifiedKFold(n_splits=3, n_repeats=2, random_state=RANDOM_STATE)
     cv_summary = []
     best_estimators = {}
@@ -389,9 +505,15 @@ def main():
         best_estimators[name] = search.best_estimator_
 
         scores, pr_scores, mcc_scores = [], [], []
-        for train_idx, test_idx in cv.split(X_train, y_train):
-            X_tr, X_te = X_train[train_idx], X_train[test_idx]
-            y_tr, y_te = y_train[train_idx], y_train[test_idx]
+        for tr_idx, te_idx in cv.split(X_train, y_train):
+            X_tr, X_te = X_train[tr_idx], X_train[te_idx]
+            y_tr, y_te = y_train[tr_idx], y_train[te_idx]
+            # Apply SMOTE within each CV fold
+            if HAS_SMOTE and len(np.unique(y_tr)) > 1:
+                k_n = min(5, np.bincount(y_tr).min() - 1)
+                if k_n >= 1:
+                    smote = SMOTE(random_state=RANDOM_STATE, k_neighbors=k_n)
+                    X_tr, y_tr = smote.fit_resample(X_tr, y_tr)
             est = search.best_estimator_
             est.fit(X_tr, y_tr)
             probs = est.predict_proba(X_te)
@@ -413,30 +535,137 @@ def main():
         ece_val, _ = ece_score_fn(np.ones(len(y_val)), val_probs_true)
         calibration_metrics[name] = ece_val
 
-        print(f"ROC-AUC={np.mean(scores):.4f} ({train_times[name]:.0f}s)")
+        print(f"ROC-AUC={np.mean(scores):.4f} MCC={np.mean(mcc_scores):.4f} ({train_times[name]:.0f}s)")
 
-    # ── 6. Best model & test eval ─────────────────────────────────────
-    print("\n[6/12] Evaluating best model...")
-    cv_summary_sorted = sorted(cv_summary, key=lambda r: r["roc_auc_mean"], reverse=True)
-    best_model_name = cv_summary_sorted[0]["model"]
+    # ── Train GNN (WL Graph Classifier) ──────────────────────────────
+    print(f"  Training GNN (WL graph kernel)...", end=" ", flush=True)
+    t0 = time.time()
+    gnn = WLGraphClassifier(n_iterations=4, class_weight="balanced", random_state=RANDOM_STATE)
+    gnn.fit(smiles_train, y_train)
+    train_times["GNN"] = time.time() - t0
+    best_estimators["GNN"] = gnn
+
+    scores_gnn, pr_gnn, mcc_gnn = [], [], []
+    for tr_idx, te_idx in cv.split(X_train, y_train):
+        smi_tr = [smiles_train[i] for i in tr_idx]
+        smi_te = [smiles_train[i] for i in te_idx]
+        y_tr, y_te = y_train[tr_idx], y_train[te_idx]
+        est_gnn = WLGraphClassifier(n_iterations=4, class_weight="balanced", random_state=RANDOM_STATE)
+        est_gnn.fit(smi_tr, y_tr)
+        gnn_probs = est_gnn.predict_proba(smi_te)
+        gnn_preds = est_gnn.predict(smi_te)
+        scores_gnn.append(roc_auc_score(y_te, gnn_probs[:, 1]))
+        pr_gnn.append(average_precision_score(y_te, gnn_probs[:, 1]))
+        mcc_gnn.append(matthews_corrcoef(y_te, gnn_preds))
+
+    cv_summary.append({
+        "model": "GNN",
+        "roc_auc_mean": np.mean(scores_gnn), "roc_auc_std": np.std(scores_gnn),
+        "pr_auc_mean": np.mean(pr_gnn), "pr_auc_std": np.std(pr_gnn),
+        "mcc_mean": np.mean(mcc_gnn), "mcc_std": np.std(mcc_gnn),
+    })
+    fold_scores["GNN"] = scores_gnn
+    gnn_val_probs = gnn.predict_proba(smiles_val)
+    gnn_val_true = gnn_val_probs[np.arange(len(y_val)), y_val]
+    ece_gnn, _ = ece_score_fn(np.ones(len(y_val)), gnn_val_true)
+    calibration_metrics["GNN"] = ece_gnn
+    print(f"ROC-AUC={np.mean(scores_gnn):.4f} MCC={np.mean(mcc_gnn):.4f} ({train_times['GNN']:.0f}s)")
+
+    # ── 6. MCDA-based model selection & test eval ─────────────────────
+    print("\n[6/12] Selecting best model (MCDA composite, MCC-weighted)...")
+    # Compute composite MCDA score: MCC=40%, ROC-AUC=25%, PR-AUC=20%, calibration=10%, efficiency=5%
+    sel_rows = []
+    for row in cv_summary:
+        n = row["model"]
+        sel_rows.append({
+            "model": n,
+            "mcc": row["mcc_mean"],
+            "roc_auc": row["roc_auc_mean"],
+            "pr_auc": row["pr_auc_mean"],
+            "calibration": max(0.0, 1.0 - calibration_metrics.get(n, 0.5)),
+            "efficiency": 1.0 / (1.0 + train_times.get(n, 1.0)),
+        })
+    sel_weights = {"mcc": 0.40, "roc_auc": 0.25, "pr_auc": 0.20, "calibration": 0.10, "efficiency": 0.05}
+    for metric in sel_weights:
+        vals = [r[metric] for r in sel_rows]
+        mn, mx = min(vals), max(vals)
+        for r in sel_rows:
+            r[f"{metric}_norm"] = (r[metric] - mn) / (mx - mn) if mx > mn else 1.0
+    for r in sel_rows:
+        r["composite"] = sum(r[f"{m}_norm"] * w for m, w in sel_weights.items())
+    sel_rows = sorted(sel_rows, key=lambda r: r["composite"], reverse=True)
+
+    best_model_name = sel_rows[0]["model"]
     best_model = best_estimators[best_model_name]
-    best_model.fit(np.vstack([X_train, X_val]), np.hstack([y_train, y_val]))
-    print(f"  Best model: {best_model_name}")
 
-    test_probs = best_model.predict_proba(X_test)
-    test_preds = best_model.predict(X_test)
+    # Top-3 unique models for consensus
+    top3_models = []
+    for r in sel_rows:
+        if r["model"] not in top3_models:
+            top3_models.append(r["model"])
+        if len(top3_models) == 3:
+            break
+
+    print(f"  Best model (MCDA): {best_model_name}")
+    print(f"  Top-3 consensus  : {top3_models}")
+    for r in sel_rows:
+        print(f"    {r['model']:<15s} MCC={r['mcc']:.4f} ROC-AUC={r['roc_auc']:.4f} composite={r['composite']:.4f}")
+
+    # Refit best model with SMOTE
+    X_combined = np.vstack([X_train, X_val])
+    y_combined = np.hstack([y_train, y_val])
+    if best_model_name == "GNN":
+        smiles_combined = smiles_train + smiles_val
+        best_model.fit(smiles_combined, y_combined)
+    else:
+        if HAS_SMOTE and len(np.unique(y_combined)) > 1:
+            k_n = min(5, np.bincount(y_combined).min() - 1)
+            if k_n >= 1:
+                smote = SMOTE(random_state=RANDOM_STATE, k_neighbors=k_n)
+                X_refit, y_refit = smote.fit_resample(X_combined, y_combined)
+                print(f"  SMOTE: {len(y_combined)} → {len(y_refit)} samples")
+            else:
+                X_refit, y_refit = X_combined, y_combined
+        else:
+            X_refit, y_refit = X_combined, y_combined
+        best_model.fit(X_refit, y_refit)
+
+    # Refit other top-3 on same augmented data
+    for m_name in top3_models:
+        if m_name == best_model_name:
+            continue
+        if m_name == "GNN":
+            smiles_combined = smiles_train + smiles_val
+            best_estimators[m_name].fit(smiles_combined, y_combined)
+        else:
+            best_estimators[m_name].fit(X_refit if HAS_SMOTE else X_combined,
+                                        y_refit if HAS_SMOTE else y_combined)
+
+    cv_summary_sorted = sorted(cv_summary, key=lambda r: r["mcc_mean"], reverse=True)
+
+    if best_model_name == "GNN":
+        test_probs = best_model.predict_proba(smiles_test)
+        test_preds = best_model.predict(smiles_test)
+        calibrated = best_model
+        cal_probs = test_probs
+    else:
+        test_probs = best_model.predict_proba(X_test)
+        test_preds = best_model.predict(X_test)
+        calibrated = CalibratedClassifierCV(best_model, method="isotonic", cv=3)
+        calibrated.fit(X_refit if (HAS_SMOTE and best_model_name != "GNN") else X_combined,
+                       y_refit if (HAS_SMOTE and best_model_name != "GNN") else y_combined)
+        cal_probs = calibrated.predict_proba(X_test)
+
     test_roc = roc_auc_score(y_test, test_probs[:, 1])
     test_pr = average_precision_score(y_test, test_probs[:, 1])
     test_mcc = matthews_corrcoef(y_test, test_preds)
-
-    calibrated = CalibratedClassifierCV(best_model, method="isotonic", cv=3)
-    calibrated.fit(np.vstack([X_train, X_val]), np.hstack([y_train, y_val]))
-    cal_probs = calibrated.predict_proba(X_test)
     cal_probs_true = cal_probs[np.arange(len(y_test)), y_test]
     ece, mce = ece_score_fn(np.ones(len(y_test)), cal_probs_true)
 
     print(f"  ROC-AUC={test_roc:.4f}, PR-AUC={test_pr:.4f}, MCC={test_mcc:.4f}")
     print(f"  ECE={ece:.4f}, MCE={mce:.4f}")
+    if ece > 0.15:
+        print(f"  NOTE: High ECE={ece:.3f} — use conformal prediction sets, not raw probabilities")
 
     # ── 7. Visualization plots ────────────────────────────────────────
     print("\n[7/12] Generating evaluation plots...")
@@ -511,8 +740,8 @@ def main():
     fig.tight_layout(); fig.savefig(OUTPUT_DIR / "05_calibration_curves.png", dpi=150, bbox_inches="tight")
     plt.close(fig)
 
-    # Feature importance
-    if hasattr(best_model.named_steps["model"], "feature_importances_"):
+    # Feature importance (only for sklearn pipeline models, not GNN)
+    if best_model_name != "GNN" and hasattr(best_model, "named_steps") and hasattr(best_model.named_steps.get("model", None), "feature_importances_"):
         importances = best_model.named_steps["model"].feature_importances_
         top_k = 20
         indices = np.argsort(importances)[-top_k:]
@@ -547,26 +776,28 @@ def main():
             r["Significant"] = "Yes" if r["p-value"] < bonferroni else "No"
             r["Bonferroni alpha"] = bonferroni
 
-    # MCDA
+    # MCDA (MCC-weighted for class imbalance)
     mcda_rows = []
     for row in cv_summary_sorted:
         name = row["model"]
         mcda_rows.append({
-            "model": name, "roc_auc": row["roc_auc_mean"], "pr_auc": row["pr_auc_mean"],
+            "model": name,
+            "mcc": row["mcc_mean"],
+            "roc_auc": row["roc_auc_mean"], "pr_auc": row["pr_auc_mean"],
             "calibration": max(0.0, 1-calibration_metrics.get(name, ece)),
             "robustness": max(0.0, 1-row["roc_auc_std"]),
             "efficiency": 1.0/(1.0+train_times.get(name, 1.0)),
-            "interpretability": 1.0 if name in {"RandomForest","LightGBM","XGBoost"} else 0.5,
+            "interpretability": 1.0 if name in {"RandomForest","LightGBM","XGBoost"} else 0.6,
         })
-    weights = {"roc_auc": 0.25, "pr_auc": 0.20, "calibration": 0.20,
-               "robustness": 0.15, "efficiency": 0.10, "interpretability": 0.10}
+    weights = {"mcc": 0.30, "roc_auc": 0.20, "pr_auc": 0.18,
+               "calibration": 0.15, "robustness": 0.10, "efficiency": 0.04, "interpretability": 0.03}
     for metric in weights:
         vals = [r[metric] for r in mcda_rows]
         mn, mx = min(vals), max(vals)
         for r in mcda_rows:
-            r[metric] = (r[metric]-mn)/(mx-mn) if mx > mn else 1.0
+            r[f"{metric}_norm"] = (r[metric]-mn)/(mx-mn) if mx > mn else 1.0
     for r in mcda_rows:
-        r["composite"] = sum(r[m]*w for m, w in weights.items())
+        r["composite"] = sum(r[f"{m}_norm"]*w for m, w in weights.items())
     mcda_rows = sorted(mcda_rows, key=lambda r: r["composite"], reverse=True)
     print(f"  MCDA winner: {mcda_rows[0]['model']}")
 
@@ -621,11 +852,21 @@ def main():
 
     # ── 10. Save model ────────────────────────────────────────────────
     print("\n[10/12] Saving model artifacts...")
+    sas_cores = getattr(model_artifacts_tmp := {}, "sas_cores", {}) if False else {}
     model_artifacts = {
         "best_model": best_model, "calibrated_model": calibrated,
+        "all_estimators": best_estimators,
+        "top3_models": top3_models,
         "selected_columns": selected_columns, "activity_class_map": ACTIVITY_CLASS_MAP,
         "num_classes": NUM_CLASSES, "ad_threshold": ad_threshold,
+        "severe_ood_threshold": SEVERE_OOD_THRESHOLD,
         "nn_model": nn, "conformal_q": q_threshold, "best_model_name": best_model_name,
+        "sas_cores": sas_cores,
+        "smiles_train": smiles_train,
+        "target_panel": TARGET_PANEL,
+        "mcda_ranking": [{"model": r["model"], "composite": r["composite"],
+                          "mcc": r["mcc"], "roc_auc": r["roc_auc"]}
+                         for r in mcda_rows],
     }
     model_path = MODEL_DIR / "safety_model.pkl"
     with open(model_path, "wb") as fh:
@@ -636,14 +877,22 @@ def main():
         "class_distribution": {ACTIVITY_CLASS_MAP[c]: int((labels_all==c).sum()) for c in range(NUM_CLASSES)},
         "train_size": len(X_train), "val_size": len(X_val), "test_size": len(X_test),
         "best_model": best_model_name,
+        "top3_models": top3_models,
+        "model_selection_method": "MCDA composite (MCC=40%, ROC-AUC=25%, PR-AUC=20%)",
         "test_metrics": {"roc_auc_macro": test_roc, "pr_auc_macro": test_pr,
                          "mcc": test_mcc, "ece": ece, "mce": mce},
         "conformal_coverage": coverage,
-        "avg_prediction_set_size": float(set_sizes.mean()), "out_of_domain_rate": ood_rate,
+        "avg_prediction_set_size": float(set_sizes.mean()),
+        "out_of_domain_rate": ood_rate,
+        "calibration_warning": ece > 0.15,
+        "smote_applied": HAS_SMOTE,
+        "mcda_ranking": [{"model": r["model"], "composite": r["composite"]} for r in mcda_rows],
     }
     with open(OUTPUT_DIR / "workflow_summary.json", "w") as fh:
         json.dump(summary, fh, indent=2)
     print(f"  Model saved: {model_path}")
+    print(f"  Best model (MCDA): {best_model_name}")
+    print(f"  Top-3 consensus  : {top3_models}")
 
     # ── 11. Held-out test set ─────────────────────────────────────────
     print("\n[11/12] Evaluating held-out test set...")
@@ -681,24 +930,53 @@ def main():
         y_test_ext_valid = y_test_ext[valid_mask]
         test_df_valid = test_df[valid_mask].copy()
 
+        smiles_test_ext = [r["canonical_smiles"] for r, valid in
+                           zip(test_rows_for_features, valid_mask) if valid]
+
         if len(y_test_ext_valid) > 0:
-            ext_probs = best_model.predict_proba(X_test_ext_valid)
-            ext_preds = best_model.predict(X_test_ext_valid)
+            if best_model_name == "GNN":
+                ext_probs = best_model.predict_proba(smiles_test_ext)
+                ext_preds = best_model.predict(smiles_test_ext)
+            else:
+                ext_probs = best_model.predict_proba(X_test_ext_valid)
+                ext_preds = best_model.predict(X_test_ext_valid)
+
+            # Consensus from top-3 models
+            con_probs_list = []
+            for m_name in top3_models:
+                est_m = best_estimators[m_name]
+                try:
+                    if m_name == "GNN":
+                        mp = est_m.predict_proba(smiles_test_ext)
+                    else:
+                        mp = est_m.predict_proba(X_test_ext_valid)
+                    con_probs_list.append(mp)
+                except Exception:
+                    pass
+            consensus_probs = np.mean(np.stack(con_probs_list, axis=0), axis=0) if con_probs_list else ext_probs
+            consensus_preds = np.argmax(consensus_probs, axis=1)
+
             ext_dists = nn.kneighbors(X_test_ext_valid)[0].mean(axis=1)
             ext_in_domain = ext_dists <= ad_threshold
+            ext_severe_ood = ext_dists > SEVERE_OOD_THRESHOLD
 
             test_ext_classes = sorted(set(y_test_ext_valid))
             if len(test_ext_classes) >= 2:
                 try:
                     ext_roc = roc_auc_score(y_test_ext_valid, ext_probs[:, 1])
+                    con_roc = roc_auc_score(y_test_ext_valid, consensus_probs[:, 1])
                 except ValueError:
-                    ext_roc = float("nan")
+                    ext_roc = con_roc = float("nan")
             ext_mcc = matthews_corrcoef(y_test_ext_valid, ext_preds)
+            con_mcc = matthews_corrcoef(y_test_ext_valid, consensus_preds)
             ext_acc = (ext_preds == y_test_ext_valid).mean()
 
-            print(f"  ROC-AUC={ext_roc:.4f}, MCC={ext_mcc:.4f}, Acc={ext_acc:.4f}")
-            print(f"  In-domain: {ext_in_domain.sum()}/{len(ext_in_domain)}")
+            print(f"  Best model  — ROC-AUC={ext_roc:.4f}, MCC={ext_mcc:.4f}, Acc={ext_acc:.4f}")
+            print(f"  Consensus   — ROC-AUC={con_roc:.4f}, MCC={con_mcc:.4f}")
+            print(f"  In-domain: {ext_in_domain.sum()}/{len(ext_in_domain)}, "
+                  f"Severe OOD (>{SEVERE_OOD_THRESHOLD:.0f}): {ext_severe_ood.sum()}")
 
+            suspicious_targets = []
             for target in sorted(test_df_valid["target"].unique()):
                 tmask = test_df_valid["target"].values == target
                 if tmask.sum() < 2:
@@ -706,8 +984,40 @@ def main():
                 t_true = y_test_ext_valid[tmask]
                 t_pred = ext_preds[tmask]
                 t_acc = (t_pred == t_true).mean()
-                t_mcc = matthews_corrcoef(t_true, t_pred) if len(set(t_true)) > 1 else 0.0
-                test_target_metrics[target] = {"n": int(tmask.sum()), "acc": t_acc, "mcc": t_mcc}
+                t_mcc = matthews_corrcoef(t_true, t_pred) if len(set(t_true)) > 1 else float("nan")
+                is_suspicious = t_mcc == 1.0
+                if is_suspicious:
+                    suspicious_targets.append(target)
+                test_target_metrics[target] = {
+                    "n": int(tmask.sum()), "acc": t_acc,
+                    "mcc": t_mcc if not np.isnan(t_mcc) else 0.0,
+                    "suspicious_mcc1": is_suspicious,
+                }
+                flag = " *** MCC=1 SUSPECT" if is_suspicious else ""
+                print(f"    {target:<12s} n={tmask.sum()} acc={t_acc:.3f} mcc={t_mcc:.3f}{flag}"
+                      if not np.isnan(t_mcc) else
+                      f"    {target:<12s} n={tmask.sum()} acc={t_acc:.3f} mcc=N/A")
+
+            if suspicious_targets:
+                print(f"  WARNING: {len(suspicious_targets)} target(s) with MCC=1 — "
+                      f"possible data leakage: {suspicious_targets}")
+
+            def _activity_lbl(p):
+                return f"Active (<{ACTIVITY_THRESHOLD_UM}µM)" if p == 1 else f"Inactive(>={ACTIVITY_THRESHOLD_UM}µM)"
+
+            test_df_valid = test_df_valid.copy()
+            test_df_valid["predicted_class"]      = ext_preds
+            test_df_valid["predicted_label"]      = [ACTIVITY_CLASS_MAP.get(int(p), "?") for p in ext_preds]
+            test_df_valid["predicted_activity"]   = [_activity_lbl(p) for p in ext_preds]
+            test_df_valid["consensus_class"]      = consensus_preds
+            test_df_valid["consensus_activity"]   = [_activity_lbl(p) for p in consensus_preds]
+            test_df_valid["in_domain"]            = ext_in_domain
+            test_df_valid["severe_ood"]           = ext_severe_ood
+            test_df_valid["knn_distance"]         = ext_dists
+            test_df_valid["prob_binding"]         = ext_probs[:, 1]
+            test_df_valid["consensus_prob_binding"] = consensus_probs[:, 1]
+            test_df_valid["target_suspicious_mcc1"] = test_df_valid["target"].isin(suspicious_targets)
+            test_df_valid.to_csv(OUTPUT_DIR / "test_set_predictions.csv", index=False)
 
             # Test set results plot
             fig, axes = plt.subplots(1, 3, figsize=(18, 5))
@@ -744,15 +1054,7 @@ def main():
             fig.savefig(OUTPUT_DIR / "08_test_set_results.png", dpi=150, bbox_inches="tight")
             plt.close(fig)
 
-            # Save predictions
-            test_df_valid["predicted_class"] = ext_preds
-            test_df_valid["predicted_label"] = [ACTIVITY_CLASS_MAP.get(int(p), "?") for p in ext_preds]
-            test_df_valid["correct"] = ext_preds == y_test_ext_valid
-            test_df_valid["in_domain"] = ext_in_domain
-            for c in range(NUM_CLASSES):
-                test_df_valid[f"prob_{ACTIVITY_CLASS_MAP[c]}"] = ext_probs[:, c]
-            test_df_valid["max_confidence"] = ext_probs.max(axis=1)
-            test_df_valid.to_csv(OUTPUT_DIR / "test_set_predictions.csv", index=False)
+            # test_set_predictions.csv already saved above
             print("  Saved: 08_test_set_results.png, test_set_predictions.csv")
     else:
         print(f"  Test file not found: {TEST_PATH}")
@@ -795,7 +1097,9 @@ def main():
         lines.append(f"| {row['model']} | {row['roc_auc_mean']:.4f} +/- {row['roc_auc_std']:.4f} | "
                      f"{row['pr_auc_mean']:.4f} +/- {row['pr_auc_std']:.4f} | "
                      f"{row['mcc_mean']:.4f} +/- {row['mcc_std']:.4f} |")
-    lines.append(f"\n**Selected model:** {best_model_name} (highest ROC-AUC)\n")
+    lines.append(f"\n**Selected model:** {best_model_name} (MCDA composite: MCC=40%, ROC-AUC=25%, PR-AUC=20%)")
+    lines.append(f"\n**Top-3 consensus models:** {', '.join(top3_models)}")
+    lines.append(f"\n**SMOTE applied:** {'Yes (imbalanced-learn)' if HAS_SMOTE else 'No (install imbalanced-learn)'}\n")
 
     lines.append("## 3. Internal Test Set Performance (Scaffold Split)\n")
     lines.append("| Metric | Value |")
