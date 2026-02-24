@@ -1,141 +1,144 @@
 # OFFTOXv3 Analysis Report
 
-**Generated:** 2026-02-16 17:34
-**Best Model:** XGBoost
+**Generated:** 2026-02-22 23:28
+**Best Model:** LightGBM
 **Targets:** 24 safety pharmacology targets
+**Classification:** Binary (binding vs non-binding at 10 uM threshold)
 
 ## 1. Dataset Summary
 
-- **Total training compounds:** 2665
-- **Unique targets:** 24
-- **Train/Val/Test split:** 1599/533/533 (scaffold-based)
-- **Feature dimensions:** 863
+- **Total training compounds:** 19696
+- **Unique targets:** 23
+- **Train/Val/Test split:** 11817/3939/3940 (scaffold-based)
+- **Feature dimensions:** 1039 (10 descriptors + 2048 Morgan FP + target encoding)
 
 ### Class Distribution
 
 | Class | Label | Count | Percentage |
 |-------|-------|------:|----------:|
-| 0 | inactive | 696 | 26.1% |
-| 1 | less_potent | 596 | 22.4% |
-| 2 | potent | 1373 | 51.5% |
+| 0 | non_binding | 3144 | 16.0% |
+| 1 | binding | 16552 | 84.0% |
 
 ### Per-Target Compound Counts
 
-| Target | Category | Total | Potent | Less Potent | Inactive |
-|--------|----------|------:|-------:|------------:|---------:|
-| AR | Nuclear Hormone Receptor | 34 | 8 | 2 | 24 |
-| BSEP | Transporter | 36 | 7 | 2 | 27 |
-| CAR | Nuclear Hormone Receptor | 38 | 7 | 2 | 29 |
-| CYP1A2 | Hepatotoxicity | 279 | 134 | 106 | 39 |
-| CYP2C19 | Hepatotoxicity | 34 | 6 | 2 | 26 |
-| CYP2C9 | Hepatotoxicity | 35 | 7 | 1 | 27 |
-| CYP2D6 | Hepatotoxicity | 443 | 272 | 135 | 36 |
-| CYP3A4 | Hepatotoxicity | 378 | 222 | 122 | 34 |
-| Cav1.2 | Cardiac Safety | 205 | 123 | 50 | 32 |
-| ER_beta | Nuclear Hormone Receptor | 38 | 9 | 3 | 26 |
-| ERa | Nuclear Hormone Receptor | 34 | 7 | 3 | 24 |
-| FXR | Nuclear Hormone Receptor | 34 | 6 | 2 | 26 |
-| GR | Nuclear Hormone Receptor | 36 | 5 | 3 | 28 |
-| LXRa | Nuclear Hormone Receptor | 33 | 7 | 2 | 24 |
-| LXRb | Nuclear Hormone Receptor | 38 | 6 | 2 | 30 |
-| MR | Nuclear Hormone Receptor | 40 | 9 | 3 | 28 |
-| Nav1.5 | Cardiac Safety | 350 | 246 | 70 | 34 |
-| P-gp | Transporter | 42 | 8 | 3 | 31 |
-| PPARg | Nuclear Hormone Receptor | 35 | 5 | 1 | 29 |
-| PR | Nuclear Hormone Receptor | 36 | 8 | 2 | 26 |
-| PXR | Nuclear Hormone Receptor | 38 | 7 | 1 | 30 |
-| RXRa | Nuclear Hormone Receptor | 35 | 4 | 1 | 30 |
-| VDR | Nuclear Hormone Receptor | 33 | 6 | 1 | 26 |
-| hERG | Cardiac Safety | 361 | 254 | 77 | 30 |
+| Target | Category | Total | Binding | Non-Binding |
+|--------|----------|------:|--------:|------------:|
+| AR | Nuclear Hormone Receptor | 1277 | 1226 | 51 |
+| BSEP | Transporter | 141 | 90 | 51 |
+| CAR | Nuclear Hormone Receptor | 3 | 0 | 3 |
+| CYP1A2 | Hepatotoxicity | 996 | 630 | 366 |
+| CYP2C19 | Hepatotoxicity | 1013 | 607 | 406 |
+| CYP2C9 | Hepatotoxicity | 1096 | 686 | 410 |
+| CYP2D6 | Hepatotoxicity | 1082 | 737 | 345 |
+| CYP3A4 | Hepatotoxicity | 1059 | 689 | 370 |
+| Cav1.2 | Cardiac Safety | 223 | 149 | 74 |
+| ER_beta | Nuclear Hormone Receptor | 1199 | 1128 | 71 |
+| ERa | Nuclear Hormone Receptor | 1330 | 1249 | 81 |
+| FXR | Nuclear Hormone Receptor | 1108 | 1046 | 62 |
+| GR | Nuclear Hormone Receptor | 1295 | 1281 | 14 |
+| LXRb | Nuclear Hormone Receptor | 34 | 17 | 17 |
+| MR | Nuclear Hormone Receptor | 940 | 930 | 10 |
+| Nav1.5 | Cardiac Safety | 425 | 328 | 97 |
+| P-gp | Transporter | 769 | 569 | 200 |
+| PPARg | Nuclear Hormone Receptor | 1352 | 1284 | 68 |
+| PR | Nuclear Hormone Receptor | 1208 | 1183 | 25 |
+| PXR | Nuclear Hormone Receptor | 208 | 193 | 15 |
+| RXRa | Nuclear Hormone Receptor | 911 | 888 | 23 |
+| VDR | Nuclear Hormone Receptor | 383 | 312 | 71 |
+| hERG | Cardiac Safety | 1644 | 1330 | 314 |
 
 ## 2. Cross-Validation Results
 
 | Model | ROC-AUC | PR-AUC | MCC |
 |-------|--------:|-------:|----:|
-| XGBoost | 0.9306 +/- 0.0084 | 0.8304 +/- 0.0168 | 0.7302 +/- 0.0168 |
-| LightGBM | 0.9293 +/- 0.0096 | 0.8325 +/- 0.0171 | 0.7229 +/- 0.0217 |
-| RandomForest | 0.9285 +/- 0.0069 | 0.8295 +/- 0.0157 | 0.7229 +/- 0.0190 |
+| LightGBM | 0.9237 +/- 0.0035 | 0.9839 +/- 0.0009 | 0.5847 +/- 0.0151 |
+| XGBoost | 0.9242 +/- 0.0052 | 0.9841 +/- 0.0012 | 0.5745 +/- 0.0215 |
+| RandomForest | 0.9148 +/- 0.0035 | 0.9819 +/- 0.0007 | 0.5401 +/- 0.0168 |
+| GNN | 0.8791 +/- 0.0022 | 0.9733 +/- 0.0004 | 0.4790 +/- 0.0058 |
 
-**Selected model:** XGBoost (highest ROC-AUC)
+**Selected model:** LightGBM (highest ROC-AUC)
 
 ## 3. Internal Test Set Performance (Scaffold Split)
 
 | Metric | Value |
 |--------|------:|
-| ROC-AUC (macro) | 0.8748 |
-| PR-AUC (macro) | 0.7481 |
-| MCC | 0.5204 |
-| ECE (calibrated) | 0.3792 |
-| MCE (calibrated) | 0.9440 |
+| ROC-AUC | 0.8895 |
+| PR-AUC | 0.9721 |
+| MCC | 0.4858 |
+| ECE (calibrated) | 0.2008 |
+| MCE (calibrated) | 0.9471 |
 
 ### Confusion Matrix
 
-| | Pred: inactive | Pred: less_potent | Pred: potent |
-|---|---:|---:|---:|
-| **inactive** | 74 | 30 | 14 |
-| **less_potent** | 4 | 57 | 58 |
-| **potent** | 2 | 40 | 254 |
+| | Pred: non_binding | Pred: binding |
+|---|---:|---:|
+| **non_binding** | 322 | 393 |
+| **binding** | 142 | 3083 |
 
 ## 4. Uncertainty Quantification
 
-- **Conformal coverage:** 0.9418 (target: 0.95)
-- **Average prediction set size:** 2.02
-- **AD threshold (95th pct k-NN):** 16.1152
-- **Out-of-domain rate:** 27.58%
+- **Conformal coverage:** 0.9500 (target: 0.95)
+- **Average prediction set size:** 1.25
+- **AD threshold (95th pct k-NN):** 10.3700
+- **Out-of-domain rate:** 35.20%
 
 ## 5. Held-Out Test Set Evaluation
 
 - **Test compounds:** 452
-- **ROC-AUC (macro):** 0.9149
-- **MCC:** 0.6984
-- **Accuracy:** 0.8119
+- **ROC-AUC:** 0.9341
+- **MCC:** 0.7519
+- **Accuracy:** 0.8739
 
 ### Per-Target Test Performance
 
 | Target | N | Accuracy | MCC |
 |--------|--:|---------:|----:|
-| AR | 10 | 0.900 | 0.728 |
-| BSEP | 7 | 0.857 | 0.715 |
-| CAR | 4 | 1.000 | 1.000 |
-| CYP1A2 | 37 | 0.568 | 0.182 |
-| CYP2C19 | 9 | 1.000 | 1.000 |
-| CYP2C9 | 9 | 0.667 | 0.447 |
-| CYP2D6 | 63 | 0.778 | 0.588 |
-| CYP3A4 | 62 | 0.742 | 0.563 |
-| Cav1.2 | 34 | 0.735 | 0.586 |
-| ER_beta | 7 | 1.000 | 1.000 |
-| ERa | 12 | 0.833 | 0.726 |
-| FXR | 7 | 0.857 | 0.500 |
-| GR | 7 | 0.857 | 0.772 |
+| AR | 10 | 0.400 | 0.218 |
+| BSEP | 7 | 1.000 | 1.000 |
+| CAR | 4 | 0.750 | 0.000 |
+| CYP1A2 | 37 | 0.946 | 0.892 |
+| CYP2C19 | 9 | 0.778 | 0.357 |
+| CYP2C9 | 9 | 0.667 | -0.189 |
+| CYP2D6 | 63 | 0.841 | 0.680 |
+| CYP3A4 | 62 | 0.871 | 0.744 |
+| Cav1.2 | 34 | 0.971 | 0.942 |
+| ER_beta | 7 | 0.714 | 0.471 |
+| ERa | 12 | 0.917 | 0.816 |
+| FXR | 7 | 0.714 | -0.167 |
+| GR | 7 | 0.429 | 0.000 |
 | LXRa | 8 | 1.000 | 0.000 |
 | LXRb | 2 | 1.000 | 0.000 |
-| MR | 4 | 1.000 | 0.000 |
-| Nav1.5 | 66 | 0.773 | 0.434 |
+| MR | 4 | 0.000 | 0.000 |
+| Nav1.5 | 66 | 0.939 | 0.831 |
 | P-gp | 2 | 1.000 | 1.000 |
-| PPARg | 7 | 0.857 | 0.783 |
-| PR | 6 | 1.000 | 0.000 |
-| PXR | 3 | 1.000 | 1.000 |
-| RXRa | 5 | 0.800 | 0.722 |
+| PPARg | 7 | 0.714 | 0.417 |
+| PR | 6 | 0.833 | 0.000 |
+| PXR | 3 | 0.667 | 0.000 |
+| RXRa | 5 | 0.800 | 0.667 |
 | VDR | 8 | 1.000 | 1.000 |
-| hERG | 73 | 0.945 | 0.876 |
+| hERG | 73 | 0.973 | 0.929 |
 
 ## 6. Statistical Model Comparison
 
-Bonferroni-corrected alpha = 0.0167
+Bonferroni-corrected alpha = 0.0083
 
 | Model A | Model B | t-stat | p-value | Cohen's d | Significant |
 |---------|---------|-------:|--------:|----------:|:-----------:|
-| XGBoost | LightGBM | 0.7783 | 0.471601 | 0.1477 | No |
-| XGBoost | RandomForest | 0.7118 | 0.508396 | 0.2709 | No |
-| LightGBM | RandomForest | 0.2270 | 0.829396 | 0.0920 | No |
+| LightGBM | XGBoost | -0.5743 | 0.590666 | -0.1063 | No |
+| LightGBM | RandomForest | 6.0907 | 0.001726 | 1.5680 | Yes |
+| LightGBM | GNN | 38.0157 | 0.000000 | 1.9828 | Yes |
+| XGBoost | RandomForest | 5.2987 | 0.003196 | 1.4506 | Yes |
+| XGBoost | GNN | 26.7896 | 0.000001 | 1.9692 | Yes |
+| RandomForest | GNN | 45.5566 | 0.000000 | 1.9732 | Yes |
 
 ## 7. MCDA Ranking
 
 | Rank | Model | Composite Score |
 |-----:|-------|----------------:|
-| 1 | XGBoost | 0.6862 |
-| 2 | LightGBM | 0.5912 |
-| 3 | RandomForest | 0.3500 |
+| 1 | LightGBM | 0.9528 |
+| 2 | XGBoost | 0.8269 |
+| 3 | RandomForest | 0.6412 |
+| 4 | GNN | 0.1000 |
 
 ## 8. Target Panel Reference
 
@@ -178,6 +181,6 @@ Bonferroni-corrected alpha = 0.0167
 | `06_feature_importance.png` | Top 20 feature importances |
 | `07_uncertainty.png` | Conformal sets, AD distances, reliability diagram |
 | `08_test_set_results.png` | Held-out test set results |
-| `workflow_summary.json` | Machine-readable summary |
-| `test_set_predictions.csv` | Test set predictions with probabilities |
+| `workflow_summary.json` | Machine-readable summary of all metrics |
+| `test_set_predictions.csv` | Held-out test set predictions with probabilities |
 | `analysis_report.md` | This report |
