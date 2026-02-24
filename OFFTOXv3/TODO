@@ -1,13 +1,23 @@
-#This is a TODO list for my Claude Code Companion (CCC or Isopropyl or Iso for short).
+#This is a list for my Claude Code Companion (CCC or Isopropyl or Iso for short).
 #This will keep a record of daily coding sessions with Iso and user. Iso or Claude will refer to this TODO file for daily updates.
 #Within OFFTOXv3 directory is the "run_pipeline.py" script that is used by Iso to run the code. The code in the workflow .ipynb file needs to be the main focus for changes.
 Sample entry:
 [DATE]
 - Each individual bullet will be its' own task.
   - sub bullets define particular subtasks or detailed information related to the above task.
-#Each session will be added chronologically (newest to oldest) so that the only the first entry from [DATE] to older [DATE] will be used for the TODO list.
-#However it would be beneficial to include a summary of the previous days TODO list for context as well.
-#After reviewing the TODO file, generate a plan to provide for approval in the prompt window, make sure to highlight actions based on TODO list tasks.
+#Each session will be added chronologically (newest to oldest) so that the only the first entry from [DATE] to older [DATE] will be used for the list.
+#However it would be beneficial to include a summary of the previous days entry to the list for context as well.
+#After reviewing the TODO file, generate a plan to provide for approval in the prompt window, make sure to highlight actions based on listed tasks.
+[23-February-2026]
+- I have modified the .ipynb workflow cell focused cell related to the CHEMBL data. The goal was to collect all CHEMBL bioactivity data for each target filtered to less than 100 micromolar. Then the model defines a potent binding event at 10 micromolar. So the compounds with bioactivity greater than 10 micromolar can be used as additional nonbinding compounds. However during the CHEMBL data pull make sure you collect nonbinders as well as low potent binders (nonbinders for our purpose).
+- In the predict new compounds cell, there is an error with compound standardization, I think an early piece of the workflow was incomplete, causing issues in the later cell.
+- MAJOR ISSUE: In the confusion matrix, there is still significant missed predictions of nonbinders as binders, likely due to the imbalance. Rethink ways to gather more nonbinding information from CHEMBL.
+  - Are there compounds that have lots of difference bioactivity data (from multiple targets) within CHEMBL? Reports of large compound libraries across typical promiscuity assays such as CEREP panels?
+  - Double check the SMOTE analysis portion of the workflow to make sure it is working to correct for the class imbalance.
+- Make sure parts of the workflow are not erased, I want to keep functionality but make modifications where necessary.
+- generate_report.py continues to run into errors when run in the pycharm environment. After running the workflow using run_pipeline.py, make sure generate_report.py runs as well.
+  - Revise generate_report.py to serve as an interpreter of the output files from the workflow, the last cell that builds a analysis_report.md, and the standalone_predictions.csv generated on the withdrawn example compounds in the data directory.
+      
 [22-February-2026]
 - The model selection portion of the script needs to be more holistic in the selection:
   - Model selection discrepancy. The RF was selected on ROC-AUC, but the MCDA composite ranking placed LightGBM first (0.948 vs 0.646). LightGBM's MCC (0.565 vs 0.393) is substantially better — critical given the 84:16 class imbalance. The RF's internal test MCC of 0.287 with 608 false positives vs 107 true negatives confirms poor minority-class discrimination.
