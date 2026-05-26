@@ -1,13 +1,33 @@
+# Core scientific stack
 numpy<2
 pandas>=1.5
 scikit-learn>=1.2
 xgboost>=1.7
 lightgbm>=3.3
-rdkit-pypi>=2022.9
+rdkit>=2022.9          # use 'rdkit-pypi' on older Python if 'rdkit' is unavailable
 matplotlib>=3.6
 seaborn>=0.12
 scipy>=1.10
 joblib>=1.2
 ipykernel>=6.0
 jupyter>=1.0
+
+# Class-imbalance handling (SMOTE)
 imbalanced-learn>=0.11
+
+# HTML report generator (generate_report.py)
+plotly>=5.0
+
+# CDK / CDK-extended / Substructure-count fingerprints.
+# padelpy bundles PaDEL-Descriptor (a Java app) — a Java runtime (JRE/JDK) must
+# be on PATH. If Java or padelpy is missing the workflow still runs and prints a
+# warning, falling back to RDKit fingerprints only.
+padelpy>=0.1.16
+
+# Hyperopt-sklearn AutoML. The PyPI wheel can fail to build on recent
+# setuptools, so install from GitHub and pin setuptools<81 (hyperopt still
+# imports pkg_resources, removed in setuptools 81+). If unavailable the AutoML
+# model is skipped with a warning.
+setuptools<81
+hyperopt>=0.2.7
+hpsklearn @ git+https://github.com/hyperopt/hyperopt-sklearn.git
