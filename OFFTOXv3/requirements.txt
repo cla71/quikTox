@@ -30,4 +30,4 @@ padelpy>=0.1.16
 # model is skipped with a warning.
 setuptools<81
 hyperopt>=0.2.7
-hyperopt-sklearn @ git+https://github.com/hyperopt/hyperopt-sklearn.git
+hpsklearn @ git+https://github.com/hyperopt/hyperopt-sklearn.git@0.1.0
