@@ -2,3 +2,4 @@ __pycache__/
 *.pyc
 *.pkl
 OFFTOXv3/data/cache/
+OFFTOXv3/.venv/
